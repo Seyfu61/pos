@@ -2,6 +2,8 @@
 // Dasselbe Bild dient als Vorschau und wird 1:1 an den Drucker geschickt –
 // dadurch stimmen Umlaute, €-Zeichen und Layout unabhängig von Drucker-Zeichensätzen.
 
+import { encode as encodeQr } from '../../vendor/uqr.js';
+
 const FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
 const SIZES = { s: 21, m: 26, l: 36, xl: 48 };
 
@@ -103,6 +105,29 @@ export function renderBlocks(blocks, { width = 576 } = {}) {
       });
       lines.forEach((line, i) => drawText(line, width / 2, top + 6 + i * lh + ascent, bf, 'center', '#fff'));
       y += h;
+    } else if (b.t === 'qr') {
+      // Fehlerkorrektur M; rundum bleibt die vorgeschriebene Ruhezone von 4 Modulen weiß.
+      const qr = encodeQr(b.data, { ecc: 'M', border: 0 });
+      const scale = Math.max(3, Math.min(6, Math.floor((inner * 0.62) / qr.size)));
+      const side = qr.size * scale;
+      const left = Math.round((width - side) / 2);
+      const top = y + 4 * scale;
+      ops.push((ctx) => {
+        ctx.fillStyle = '#000';
+        for (let r = 0; r < qr.size; r++) {
+          for (let c = 0; c < qr.size; c++) if (qr.data[r][c]) ctx.fillRect(left + c * scale, top + r * scale, scale, scale);
+        }
+      });
+      y = top + side + 4 * scale;
+      if (b.caption) {
+        const cf = font('s', false);
+        mctx.font = cf;
+        for (const line of wrap(mctx, b.caption, inner)) {
+          drawText(line, width / 2, y + Math.round(SIZES.s * 0.98), cf, 'center');
+          y += lineHeight('s');
+        }
+        y += 6;
+      }
     } else if (b.t === 'rule') {
       const yy = y + 9;
       ops.push((ctx) => {

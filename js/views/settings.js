@@ -88,6 +88,7 @@ function PrinterTab() {
         <div class="field wide">
           <label class="check"><input type="checkbox" checked=${p.printKitchen} onChange=${(e) => set({ printKitchen: e.target.checked })} /> Küchenbon standardmäßig drucken</label>
           <label class="check"><input type="checkbox" checked=${p.printCustomer} onChange=${(e) => set({ printCustomer: e.target.checked })} /> Kundenbon standardmäßig drucken</label>
+          <label class="check"><input type="checkbox" checked=${p.mapsQr !== false} onChange=${(e) => set({ mapsQr: e.target.checked })} /> Google-Maps-QR-Code mit der Lieferadresse auf dem Kundenbon</label>
           ${star && html`<label class="check"><input type="checkbox" checked=${p.drawer} onChange=${(e) => set({ drawer: e.target.checked })} /> Kassenschublade bei Barzahlung öffnen</label>`}
         </div>
       </div>
@@ -142,7 +143,7 @@ function OrderTab() {
   const feesText = o.deliveryFees.map((f) => eur(f, { symbol: false })).join('; ');
   const setFees = (text) => {
     const fees = [...new Set(text.split(/[;\s]+/).map(parseEur).filter((c) => c != null && c >= 0))].sort((a, b) => a - b);
-    set({ deliveryFees: fees.length ? fees : [0] });
+    set({ deliveryFees: fees });
   };
   return html`<section class="card pad">
     <h2>Bestellung</h2>
@@ -150,7 +151,7 @@ function OrderTab() {
       <div class="field wide"><span class="field-label">Standard-Bestellart</span>
         <${Segmented} options=${Object.entries(ORDER_TYPES).map(([value, label]) => ({ value, label }))} value=${o.defaultType} onChange=${(defaultType) => set({ defaultType })} />
       </div>
-      <${Field} label="Lieferkosten – Schnellauswahl (€)" hint="Mehrere Beträge mit Semikolon trennen, z. B. 0; 1,50; 2,50. Andere Beträge lassen sich an der Kasse frei eingeben." wide>
+      <${Field} label="Lieferkosten – Schnellauswahl (€)" hint="Mehrere Beträge mit Semikolon trennen, z. B. 1,80; 2,50; 3,50. Andere Beträge lassen sich an der Kasse frei eingeben." wide>
         <${TextInput} class="input" value=${feesText} onCommit=${setFees} />
       <//>
       <div class="field"><span class="field-label">MwSt. auf Lieferkosten</span>

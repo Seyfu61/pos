@@ -3,7 +3,6 @@
 export const ORDER_TYPES = {
   delivery: 'Lieferung',
   pickup: 'Abholung',
-  dinein: 'Im Haus',
 };
 
 export const PAYMENTS = {

@@ -7,7 +7,7 @@ import { ORDER_TYPES, PAYMENTS, daySummary } from '../lib/order.js';
 import { customerReceipt, dayReport, kitchenTicket } from '../print/receipt.js';
 import { printReceipts, renderReceipt } from '../print/index.js';
 
-const TYPE_ICON = { delivery: 'truck', pickup: 'bag', dinein: 'home' };
+const TYPE_ICON = { delivery: 'truck', pickup: 'bag' };
 
 /** Drucken – oder, wenn kein Drucker eingerichtet ist, Vorschau anzeigen. */
 export async function printOrPreview(blocks, title, settings, setPreview) {
@@ -115,7 +115,7 @@ export function OrdersView() {
             html`<button class="order-row ${o.status === 'cancelled' ? 'cancelled' : ''}" key=${o.id} onClick=${() => setSelected(o)}>
               <span class="order-nr">#${o.dayNr}</span>
               <span class="order-time">${fmtTime(o.createdAt)}</span>
-              <span class="order-type"><${Icon} name=${TYPE_ICON[o.type]} size=${18} /> ${ORDER_TYPES[o.type]}</span>
+              <span class="order-type"><${Icon} name=${TYPE_ICON[o.type] ?? 'bag'} size=${18} /> ${ORDER_TYPES[o.type] ?? o.type}</span>
               <span class="order-customer">
                 <strong>${o.customer?.name || '–'}</strong>
                 <span>${o.type === 'delivery' ? [o.customer?.street, o.customer?.city].filter(Boolean).join(', ') : `${o.lines.reduce((s, l) => s + l.qty, 0)} Artikel`}</span>

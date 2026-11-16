@@ -21,10 +21,11 @@ export const DEFAULT_SETTINGS = {
     drawer: false, // Kassenschublade bei Barzahlung öffnen
     printCustomer: true,
     printKitchen: true,
+    mapsQr: true, // Google-Maps-QR-Code mit der Lieferadresse auf dem Kundenbon
   },
   order: {
     defaultType: 'delivery',
-    deliveryFees: [0, 100, 200, 300], // Schnellauswahl in Cent
+    deliveryFees: [180, 250, 350], // Schnellauswahl in Cent
     deliveryTax: 7,
   },
 };
@@ -32,5 +33,8 @@ export const DEFAULT_SETTINGS = {
 export function mergeSettings(saved) {
   const out = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
   for (const section of Object.keys(out)) Object.assign(out[section], saved?.[section] ?? {});
+  // Stände aus früheren Versionen angleichen: alte Vorgabe der Lieferkosten, entfallene Bestellart "Im Haus".
+  if (out.order.deliveryFees.join() === '0,100,200,300') out.order.deliveryFees = [...DEFAULT_SETTINGS.order.deliveryFees];
+  if (!['delivery', 'pickup'].includes(out.order.defaultType)) out.order.defaultType = 'delivery';
   return out;
 }

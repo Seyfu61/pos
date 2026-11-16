@@ -6,12 +6,15 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt und ohne Server – alle Daten lie
 ## Was die Kasse kann
 
 - **Kasse**: Artikel antippen oder Artikelnummer eingeben (z. B. `220` + Enter), Größen und Extras wählen,
-  Notiz für die Küche, Lieferung / Abholung / Im Haus, Lieferkosten, Bar- oder Kartenzahlung mit Rückgeldrechner.
+  Notiz für die Küche, Lieferung oder Abholung, Lieferkosten (1,80 / 2,50 / 3,50 € oder freier Betrag),
+  Bar- oder Kartenzahlung.
 - **Speisekarte**: 163 Artikel in 14 Kategorien, importiert von
   [bringstar.jetzt](https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice) – mit den dortigen
-  Artikelnummern, Größen und Preisen. In den Einstellungen bearbeitbar.
+  Artikelnummern, Größen und Preisen; Tippfehler der Quelle werden beim Import korrigiert
+  (Liste in `tools/fetch-menu.mjs`). In den Einstellungen bearbeitbar.
 - **Kunden**: Suche nach Telefonnummer, Name oder Straße; Anlegen direkt an der Kasse; **CSV-Import** mit Spaltenzuordnung.
 - **Bons**: Küchenbon (groß, ohne Preise) und Kundenbon (mit Adresse, MwSt.-Ausweis), Nachdruck, Storno, Tagesbericht.
+  Bei Lieferungen steht auf dem Kundenbon ein **QR-Code**, der in Google Maps die Route zur Lieferadresse öffnet.
 - **Offline**: als App auf dem Home-Bildschirm installierbar, läuft auch ohne Internet.
 
 ## Auf dem iPad einrichten
@@ -80,8 +83,9 @@ npm run menu       # Speisekarte neu von bringstar.jetzt holen -> js/data/menu.j
 node tools/mock-printer.mjs   # Drucker-Attrappe: speichert Bons als PNG in bons/
 ```
 
-Nach `npm run menu` in der Kasse unter Einstellungen › Speisekarte „zurücksetzen“ wählen, damit der neue Stand
-übernommen wird (eigene Änderungen gehen dabei verloren). Wird eine Datei unter `js/` hinzugefügt, gehört sie auch
+Ein neuer Stand der Speisekarte wird beim nächsten Start automatisch übernommen, solange in der Kasse nichts an
+Artikeln oder Kategorien geändert wurde. Andernfalls unter Einstellungen › Speisekarte „zurücksetzen“ wählen
+(eigene Änderungen gehen dabei verloren). Wird eine Datei unter `js/` hinzugefügt, gehört sie auch
 in die Liste in `sw.js`; bei Änderungen dort `CACHE` hochzählen.
 
 | Ordner | Inhalt |
@@ -90,4 +94,4 @@ in die Liste in `sw.js`; bei Änderungen dort `CACHE` hochzählen.
 | `js/lib/` | Zustand (`store.js`), Datenbank (`db.js`), Berechnung (`order.js`), CSV (`csv.js`) |
 | `js/print/` | Bon-Aufbau (`receipt.js`), Druckbild (`raster.js`), Star WebPRNT (`webprnt.js`) |
 | `js/data/` | Speisekarte (erzeugt) und Voreinstellungen |
-| `vendor/` | Preact + htm (siehe `vendor/README.md`) |
+| `vendor/` | Preact + htm, QR-Code-Erzeugung (siehe `vendor/README.md`) |

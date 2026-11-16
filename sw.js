@@ -2,13 +2,14 @@
 // Strategie "Netz zuerst": Ist das Netz da, kommt immer die aktuelle Version;
 // ohne Netz wird die zuletzt geladene Fassung aus dem Zwischenspeicher verwendet.
 
-const CACHE = 'kasse-v1';
+const CACHE = 'kasse-v2';
 const FILES = [
   './',
   'index.html',
   'manifest.webmanifest',
   'css/app.css',
   'vendor/preact-htm.js',
+  'vendor/uqr.js',
   'js/main.js',
   'js/lib/ui.js',
   'js/lib/util.js',

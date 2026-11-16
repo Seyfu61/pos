@@ -23,6 +23,40 @@ const EXTRAS_RULES = [
 ];
 const DRINKS = /getränk/i; // 19 % MwSt., alles andere 7 %
 
+// Tippfehler der Quelle, die beim Import korrigiert werden (Namen und Beschreibungen).
+const TEXT_FIXES = [
+  ['Ananans', 'Ananas'],
+  ['Quattro Staggioni', 'Quattro Stagioni'],
+  ['Meditarrene', 'Mediterrane'],
+  ['frischer Basilikum', 'frisches Basilikum'],
+  ['Grecco', 'Greco'],
+  ['knackigerSalat', 'knackiger Salat'],
+  ['Burger Sauce(2,d,f) ,', 'Burger Sauce (2,d,f),'],
+  ['Chilli', 'Chili'],
+  ['Cheesburger', 'Cheeseburger'],
+  ['Schmlezkäse', 'Schmelzkäse'],
+  ['Mayonaise', 'Mayonnaise'],
+  ['Röstzwiebelen', 'Röstzwiebeln'],
+  ['Speiegelei', 'Spiegelei'],
+  ['Metaxasauce mir Käse', 'Metaxasauce mit Käse'],
+  ['Nudel Gerichte', 'Nudelgerichte'],
+  ['Süß-sauer Sauce', 'Süß-sauer-Sauce'],
+  ['Wasser Stil', 'Wasser still'],
+  ['Pizzabrot(a,e)', 'Pizzabrot (a,e)'],
+  ['Mezzo-Mix', 'Mezzo Mix'],
+  // einheitliche Schreibweise
+  ['Jalapenos', 'Jalapeños'],
+  ['Tzaziki', 'Zaziki'],
+  ['Brokkoli', 'Broccoli'],
+];
+// Größenbezeichnungen (nur bei exakter Übereinstimmung)
+const LABEL_FIXES = [
+  ['0,5 ml', '0,5 l'],
+  ['28cm', '30cm'], // Extra "Artischocken": gleiche Größen wie alle anderen Pizza-Extras
+  ['32cm', '40cm'],
+  ['Ohne Knoblauch', 'ohne Knoblauch'],
+];
+
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', euro: '€' };
 
 function clean(s) {
@@ -36,7 +70,25 @@ function clean(s) {
     .trim();
 }
 
+function fixText(s, used) {
+  for (const [from, to] of TEXT_FIXES) {
+    if (s.includes(from)) {
+      s = s.split(from).join(to);
+      used.add(from);
+    }
+  }
+  return s;
+}
+
+function fixLabel(s, used) {
+  const hit = LABEL_FIXES.find(([from]) => from === s);
+  if (!hit) return s;
+  used.add(hit[0]);
+  return hit[1];
+}
+
 export function parseMenu(html) {
+  const used = new Set();
   const categories = [];
   const byId = new Map();
   for (const m of html.matchAll(/<h[34] class="[^"]*anchor[^"]*" id="(\d+)">(.*?)<\/h[34]>/gs)) {
@@ -56,8 +108,8 @@ export function parseMenu(html) {
       continue;
     }
     const nr = clean(title[1].split('<span')[0]).replace(/\.$/, '');
-    const name = clean(/<span class="supMixtures">(.*?)<\/span>/s.exec(title[1])?.[1] ?? title[1]);
-    const desc = clean(tds[0].slice(title.index + title[0].length));
+    const name = fixText(clean(/<span class="supMixtures">(.*?)<\/span>/s.exec(title[1])?.[1] ?? title[1]), used);
+    const desc = fixText(clean(tds[0].slice(title.index + title[0].length)), used);
     const variants = [];
     for (const d of tds[1].matchAll(/<div class="[^"]*">(.*?)<\/div>/gs)) {
       const txt = clean(d[1]);
@@ -66,7 +118,7 @@ export function parseMenu(html) {
         problems.push(`Gericht ${dishId} (${name}): Preis nicht lesbar: "${txt}"`);
         continue;
       }
-      variants.push([p[1] ?? '', +p[2] * 100 + +p[3]]);
+      variants.push([fixLabel(p[1] ?? '', used), +p[2] * 100 + +p[3]]);
     }
     if (!variants.length) {
       problems.push(`Gericht ${dishId} (${name}): kein Preis`);
@@ -85,7 +137,16 @@ export function parseMenu(html) {
     const extras = rule && categories.find((c) => rule.extras.test(c.name));
     cat.extras = extras ? extras.id : null;
   }
-  return { categories, problems };
+  // Korrekturen, die nichts mehr treffen: Die Quelle wurde inzwischen selbst berichtigt.
+  const unused = [...TEXT_FIXES, ...LABEL_FIXES].map(([from]) => from).filter((from) => !used.has(from));
+  return { categories, problems, corrected: [...used], unused };
+}
+
+// Kurze Prüfsumme über den Inhalt: Daran erkennt die Kasse einen neuen Stand der Speisekarte.
+function revision(data) {
+  let h = 5381;
+  for (const ch of JSON.stringify(data)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0;
+  return h.toString(36);
 }
 
 function render({ categories }, fetchedAt) {
@@ -94,7 +155,7 @@ function render({ categories }, fetchedAt) {
   const lines = [
     '// Automatisch erzeugt von tools/fetch-menu.mjs – nicht von Hand bearbeiten.',
     `// Quelle: ${SOURCE_URL}`,
-    `export const MENU_SOURCE = ${JSON.stringify({ url: SOURCE_URL, fetchedAt })};`,
+    `export const MENU_SOURCE = ${JSON.stringify({ url: SOURCE_URL, fetchedAt, rev: revision([cats, products]) })};`,
     '',
     '// tax: MwSt.-Satz in %, extras: Kategorie mit den passenden Extras, isExtras: reine Extras-Kategorie',
     'export const CATEGORIES = [',
@@ -126,6 +187,8 @@ async function main() {
   await writeFile(OUT, text);
   console.log(`${menu.categories.length} Kategorien, ${count} Artikel -> ${path.relative(process.cwd(), OUT)}`);
   for (const c of menu.categories) console.log(`  ${String(c.items.length).padStart(3)}  ${c.name}`);
+  console.log(`\n${menu.corrected.length} Tippfehler-Korrekturen angewendet.`);
+  if (menu.unused.length) console.log(`Nicht mehr nötig (in der Quelle berichtigt?): ${menu.unused.join(', ')}`);
   if (menu.problems.length) {
     console.warn('\nHinweise:');
     for (const p of menu.problems) console.warn('  - ' + p);

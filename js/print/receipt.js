@@ -6,6 +6,7 @@
 //   { t:'row',  left, right, size, bold, indent }
 //   { t:'cols', cells:[{ text, w, align }], size, bold }
 //   { t:'box',  text, size }                    weiß auf schwarz, zentriert
+//   { t:'qr',   data, caption }                QR-Code, zentriert
 //   { t:'rule', dashed } / { t:'space', h }
 
 import { eur, fmtDateTime, fmtDayKey } from '../lib/util.js';
@@ -16,6 +17,15 @@ const row = (left, right, o = {}) => ({ t: 'row', left, right, ...o });
 const rule = (o = {}) => ({ t: 'rule', ...o });
 const space = (h = 10) => ({ t: 'space', h });
 const box = (t, o = {}) => ({ t: 'box', text: t, ...o });
+
+const typeLabel = (order) => (ORDER_TYPES[order.type] ?? String(order.type ?? '')).toUpperCase();
+
+/** Google-Maps-Link, der die Route zur Lieferadresse öffnet (für den QR-Code auf dem Bon). */
+export function mapsUrl(customer) {
+  const address = [customer?.street, [customer?.zip, customer?.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  if (!customer?.street || !address) return '';
+  return `https://www.google.com/maps/dir/?${new URLSearchParams({ api: '1', destination: address })}`;
+}
 
 export function lineTitle(line) {
   return [line.nr, line.name, line.variant].filter(Boolean).join(' ');
@@ -62,8 +72,10 @@ export function customerReceipt(order, settings) {
   b.push(space(6), rule());
   if (order.status === 'cancelled') b.push(box('STORNIERT', { size: 'l' }), space(4));
   b.push(row(`Bon-Nr. ${order.bonNr}`, fmtDateTime(order.createdAt), { size: 's' }));
-  b.push(space(4), box(`${ORDER_TYPES[order.type].toUpperCase()}  #${order.dayNr}`, { size: 'l' }), space(6));
+  b.push(space(4), box(`${typeLabel(order)}  #${order.dayNr}`, { size: 'l' }), space(6));
   if (customerBlock(b, order, { large: order.type === 'delivery' })) b.push(space(2));
+  const maps = order.type === 'delivery' && settings.printer?.mapsQr !== false ? mapsUrl(order.customer) : '';
+  if (maps) b.push({ t: 'qr', data: maps, caption: 'Route in Google Maps: QR-Code scannen' });
   if (order.note) b.push(text(`» ${order.note}`, { bold: true }));
   b.push(rule());
 
@@ -81,10 +93,6 @@ export function customerReceipt(order, settings) {
   b.push(row('SUMME', eur(order.total), { size: 'l', bold: true }));
   b.push(space(4));
   b.push(row('Zahlung', PAYMENTS[order.payment] ?? order.payment ?? '-'));
-  if (order.payment === 'cash' && order.given > order.total) {
-    b.push(row('Gegeben', eur(order.given, { symbol: false })));
-    b.push(row('Rückgeld', eur(order.given - order.total, { symbol: false })));
-  }
   b.push(space(10));
   taxTable(b, order.taxes);
   if (settings.shop.footer) {
@@ -98,7 +106,7 @@ export function customerReceipt(order, settings) {
 /** Küchenbon: große Schrift, keine Preise */
 export function kitchenTicket(order) {
   const b = [];
-  b.push(box(`#${order.dayNr}  ${ORDER_TYPES[order.type].toUpperCase()}`, { size: 'xl' }));
+  b.push(box(`#${order.dayNr}  ${typeLabel(order)}`, { size: 'xl' }));
   b.push(space(6), row(fmtDateTime(order.createdAt), `Bon-Nr. ${order.bonNr}`, { size: 's' }));
   const c = order.customer;
   if (c?.name) b.push(text([c.name, order.type === 'delivery' ? c.city : ''].filter(Boolean).join(' · '), { bold: true }));

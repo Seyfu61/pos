@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildRequest, bytesToBase64, drawerRequest, endpointUrl, envelope, packMono, parseResponse, paperNearEnd, statusMessages } from '../js/print/webprnt.js';
-import { customerReceipt, dayReport, kitchenTicket, testPage } from '../js/print/receipt.js';
+import { customerReceipt, dayReport, kitchenTicket, mapsUrl, testPage } from '../js/print/receipt.js';
 import { monoToPng, parseJob } from '../tools/mock-printer.mjs';
 import { mergeSettings } from '../js/data/defaults.js';
 import { daySummary } from '../js/lib/order.js';
@@ -103,7 +103,6 @@ const order = {
     { rate: 19, gross: 325, net: 273, tax: 52 },
   ],
   payment: 'cash',
-  given: 5000,
 };
 const texts = (blocks) => blocks.flatMap((b) => [b.text, b.left, b.right, ...(b.cells ?? []).map((c) => c.text)]).filter((t) => t != null);
 
@@ -113,17 +112,39 @@ test('Kundenbon enthält alle Angaben', () => {
     'Pizza Haus & mehr', 'Steintorstraße 1b', 'Tel. 05509 999440', 'St.-Nr. 20/123/45678', 'Bon-Nr. 42', '16.11.2026 18:32', 'LIEFERUNG  #7',
     'Jürgen Müller', 'Göttinger Straße 12a', '37124 Rosdorf', 'Hinweis: Hinterhaus', '» 19:30 Uhr',
     '2x 220 Pizza Margherita 40cm', '34,80', '+ Käserand', '5,00', '» ohne Zwiebeln', '1x Fanta 1,0 l', '3,25',
-    'Zwischensumme', '43,05', 'Lieferkosten', '2,00', 'SUMME', '45,05 €', 'Bar', 'Gegeben', '50,00', 'Rückgeld', '4,95',
+    'Zwischensumme', '43,05', 'Lieferkosten', '2,00', 'SUMME', '45,05 €', 'Zahlung', 'Bar',
     '7 %', '39,07', '2,73', '41,80', '19 %', '0,52', 'Guten Appetit!',
   ]) {
     assert.ok(t.includes(expected), `fehlt: ${expected}`);
   }
   assert.ok(!t.includes('STORNIERT'));
   assert.ok(texts(customerReceipt({ ...order, status: 'cancelled' }, mergeSettings())).includes('STORNIERT'));
-  // Abholung: keine Adresse, kein Rückgeld bei Kartenzahlung
-  const pickup = texts(customerReceipt({ ...order, type: 'pickup', deliveryFee: 0, total: 4305, payment: 'card', given: null }, mergeSettings()));
+  assert.ok(!t.includes('Rückgeld') && !t.includes('Gegeben'));
+  // Abholung: keine Adresse, keine Lieferkosten
+  const pickup = texts(customerReceipt({ ...order, type: 'pickup', deliveryFee: 0, total: 4305, payment: 'card' }, mergeSettings()));
   assert.ok(pickup.includes('ABHOLUNG  #7') && pickup.includes('Karte') && pickup.includes('Jürgen Müller'));
-  assert.ok(!pickup.includes('Göttinger Straße 12a') && !pickup.includes('Rückgeld') && !pickup.includes('Lieferkosten'));
+  assert.ok(!pickup.includes('Göttinger Straße 12a') && !pickup.includes('Lieferkosten'));
+  // Bestellungen mit einer früher vorhandenen Bestellart lassen sich weiterhin drucken
+  assert.ok(texts(customerReceipt({ ...order, type: 'dinein' }, mergeSettings())).includes('DINEIN  #7'));
+});
+
+test('Lieferbon trägt einen Google-Maps-QR-Code zur Adresse', () => {
+  const url = 'https://www.google.com/maps/dir/?api=1&destination=G%C3%B6ttinger+Stra%C3%9Fe+12a%2C+37124+Rosdorf';
+  assert.equal(mapsUrl(order.customer), url);
+  assert.equal(new URL(url).searchParams.get('destination'), 'Göttinger Straße 12a, 37124 Rosdorf');
+  assert.equal(mapsUrl({ name: 'Ohne Adresse', city: 'Rosdorf' }), '');
+  assert.equal(mapsUrl(null), '');
+  const qr = (o, s = mergeSettings()) => customerReceipt(o, s).filter((b) => b.t === 'qr');
+  assert.deepEqual(qr(order).map((b) => b.data), [url]);
+  // ... direkt unter der Adresse, vor den Artikeln
+  const blocks = customerReceipt(order, mergeSettings());
+  const pos = (pred) => blocks.findIndex(pred);
+  assert.ok(pos((b) => b.text === '37124 Rosdorf') < pos((b) => b.t === 'qr') && pos((b) => b.t === 'qr') < pos((b) => b.left?.startsWith('2x 220')));
+  assert.equal(qr({ ...order, type: 'pickup' }).length, 0, 'nicht bei Abholung');
+  assert.equal(qr({ ...order, customer: { name: 'Laufkunde' } }).length, 0, 'nicht ohne Adresse');
+  assert.equal(qr({ ...order, customer: null }).length, 0);
+  assert.equal(qr(order, mergeSettings({ printer: { mapsQr: false } })).length, 0, 'abschaltbar');
+  assert.equal(kitchenTicket(order).filter((b) => b.t === 'qr').length, 0, 'nicht auf dem Küchenbon');
 });
 
 test('Küchenbon: Artikel, Extras, Notizen – keine Preise', () => {

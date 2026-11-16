@@ -3,7 +3,7 @@
 import * as db from './db.js';
 import { clone, dayKey, normPhone, uid } from './util.js';
 import { indexCustomer } from './csv.js';
-import { orderTotals, sameLine } from './order.js';
+import { ORDER_TYPES, orderTotals, sameLine } from './order.js';
 import { DEFAULT_SETTINGS, mergeSettings } from '../data/defaults.js';
 import { CATEGORIES, MENU_SOURCE, PRODUCTS } from '../data/menu.js';
 
@@ -64,10 +64,13 @@ export async function init() {
   try {
     const [settings, menu, customers, cart] = await Promise.all([db.kvGet('settings'), db.kvGet('menu'), db.getAll('customers'), db.kvGet('cart')]);
     state.settings = mergeSettings(settings);
-    state.menu = menu ?? seedMenu();
-    if (!menu) await db.kvSet('menu', state.menu);
+    // Neuer Stand der mitgelieferten Speisekarte wird übernommen, solange hier nichts von Hand geändert wurde.
+    const outdated = menu && !menu.edited && menu.source?.rev !== MENU_SOURCE.rev;
+    state.menu = menu && !outdated ? menu : seedMenu();
+    if (!menu || outdated) await db.kvSet('menu', state.menu);
     state.customers = customers.map(indexCustomer);
     state.cart = cart ?? newCart();
+    if (!ORDER_TYPES[state.cart.type]) state.cart.type = state.settings.order.defaultType;
     state.persisted = (await db.requestPersistence()) || (await db.isPersisted());
     state.ready = true;
   } catch (e) {
@@ -86,7 +89,7 @@ export async function saveSettings(section, patch) {
 }
 
 async function saveMenu() {
-  state.menu = { ...state.menu };
+  state.menu = { ...state.menu, edited: true };
   emit();
   await db.kvSet('menu', state.menu);
 }
@@ -272,7 +275,7 @@ export async function importCustomers(list, mode = 'merge') {
 // --- Bestellungen ----------------------------------------------------------------------
 
 /** Warenkorb als Bestellung abschließen. Gibt die gespeicherte Bestellung zurück. */
-export async function completeOrder({ payment, given = null }) {
+export async function completeOrder({ payment }) {
   const cart = state.cart;
   const totals = cartTotals();
   const now = new Date();
@@ -289,7 +292,6 @@ export async function completeOrder({ payment, given = null }) {
     total: totals.total,
     taxes: totals.taxes,
     payment,
-    given,
   });
   clearCart();
   return order;
@@ -306,7 +308,7 @@ export async function cancelOrder(order) {
 /** Positionen einer früheren Bestellung erneut in den Warenkorb legen. */
 export function reorder(order) {
   state.cart = {
-    type: order.type,
+    type: ORDER_TYPES[order.type] ? order.type : state.settings.order.defaultType,
     customer: order.customer ? { ...order.customer } : null,
     lines: order.lines.map((l) => ({ ...clone(l), key: uid() })),
     deliveryFee: order.deliveryFee ?? 0,

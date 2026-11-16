@@ -11,7 +11,6 @@ import { CustomerPicker } from './customers.js';
 const TYPE_OPTIONS = [
   { value: 'delivery', label: ORDER_TYPES.delivery, icon: 'truck' },
   { value: 'pickup', label: ORDER_TYPES.pickup, icon: 'bag' },
-  { value: 'dinein', label: ORDER_TYPES.dinein, icon: 'home' },
 ];
 
 const hue = (i) => (i * 47 + 8) % 360;
@@ -147,26 +146,17 @@ function Checkout({ onClose }) {
   const { cart, settings } = useAppState();
   const totals = store.cartTotals();
   const [payment, setPayment] = useState('cash');
-  const [given, setGiven] = useState(null);
   const [printCustomer, setPrintCustomer] = useState(settings.printer.printCustomer);
   const [printKitchen, setPrintKitchen] = useState(settings.printer.printKitchen);
   const [busy, setBusy] = useState(false);
   const hasPrinter = settings.printer.driver !== 'none';
-
-  const quick = useMemo(() => {
-    const t = totals.total;
-    const set = new Set();
-    for (const step of [500, 1000, 2000, 5000, 10000]) set.add(Math.ceil(t / step) * step);
-    set.delete(t);
-    return [...set].sort((a, b) => a - b).slice(0, 4);
-  }, [totals.total]);
 
   const finish = async () => {
     if (busy) return;
     setBusy(true);
     let order;
     try {
-      order = await store.completeOrder({ payment, given: payment === 'cash' ? given : null });
+      order = await store.completeOrder({ payment });
     } catch (e) {
       console.error(e);
       store.toast(`Bestellung konnte nicht gespeichert werden: ${e.message}`, 'error');
@@ -187,7 +177,6 @@ function Checkout({ onClose }) {
     }
   };
 
-  const change = given != null ? given - totals.total : null;
   return html`<${Modal}
     title="Bestellung abschließen"
     onClose=${onClose}
@@ -197,21 +186,9 @@ function Checkout({ onClose }) {
   >
     <div class="checkout-total"><span>${ORDER_TYPES[cart.type]} · ${totals.count} Artikel</span><strong>${eur(totals.total)}</strong></div>
     ${cart.type === 'delivery' && !cart.customer?.street && html`<p class="warn">Achtung: Es ist noch keine Lieferadresse ausgewählt.</p>`}
+    ${cart.type === 'delivery' && totals.deliveryFee === 0 && html`<p class="warn">Hinweis: Es sind keine Lieferkosten berechnet.</p>`}
     <h3 class="section-title">Zahlung</h3>
     <${Segmented} options=${Object.entries(PAYMENTS).map(([value, label]) => ({ value, label }))} value=${payment} onChange=${setPayment} />
-    ${payment === 'cash' &&
-    html`<div class="given">
-      <div class="given-row">
-        <span class="field-label">Gegeben</span>
-        <${MoneyInput} value=${given} onCommit=${setGiven} onLive=${setGiven} placeholder="passend" />
-      </div>
-      <div class="chips">
-        <button class="chip ${given == null ? 'on' : ''}" onClick=${() => setGiven(null)}>Passend</button>
-        ${quick.map((q) => html`<button class="chip ${given === q ? 'on' : ''}" onClick=${() => setGiven(q)}>${eur(q)}</button>`)}
-      </div>
-      ${change != null &&
-      html`<div class="change ${change < 0 ? 'neg' : ''}"><span>${change < 0 ? 'Fehlt noch' : 'Rückgeld'}</span><strong>${eur(Math.abs(change))}</strong></div>`}
-    </div>`}
     <h3 class="section-title">Drucken</h3>
     <label class="check"><input type="checkbox" checked=${printKitchen} onChange=${(e) => setPrintKitchen(e.target.checked)} /> Küchenbon</label>
     <label class="check"><input type="checkbox" checked=${printCustomer} onChange=${(e) => setPrintCustomer(e.target.checked)} /> Kundenbon</label>
@@ -290,9 +267,9 @@ function Ticket({ onEdit, onCustomer, onCheckout }) {
         <span class="fee-label">Lieferkosten</span>
         <div class="chips">
           ${settings.order.deliveryFees.map(
-            (f) => html`<button class="chip ${cart.deliveryFee === f ? 'on' : ''}" onClick=${() => store.setCart({ deliveryFee: f })}>${f === 0 ? 'frei' : eur(f, { symbol: false })}</button>`,
+            (f) => html`<button class="chip ${cart.deliveryFee === f ? 'on' : ''}" onClick=${() => store.setCart({ deliveryFee: cart.deliveryFee === f ? 0 : f })}>${f === 0 ? 'frei' : eur(f, { symbol: false })}</button>`,
           )}
-          <${MoneyInput} value=${settings.order.deliveryFees.includes(cart.deliveryFee) ? null : cart.deliveryFee} onCommit=${(v) => store.setCart({ deliveryFee: Math.max(0, v ?? 0) })} placeholder="andere" aria-label="Andere Lieferkosten" />
+          <${MoneyInput} value=${cart.deliveryFee === 0 || settings.order.deliveryFees.includes(cart.deliveryFee) ? null : cart.deliveryFee} onCommit=${(v) => store.setCart({ deliveryFee: Math.max(0, v ?? 0) })} placeholder="Betrag" aria-label="Lieferkosten frei eingeben" />
         </div>
       </div>`}
       <div class="totals">

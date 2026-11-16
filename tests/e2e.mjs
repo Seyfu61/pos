@@ -103,14 +103,19 @@ try {
   await page.locator('.customer-btn').click();
   await page.getByPlaceholder('Telefonnummer, Name oder Straße').fill('0550912345');
   await page.locator('.modal .customer-row', { hasText: 'Jürgen Müller' }).click();
-  await page.locator('.fee .chip', { hasText: '2,00' }).click();
+  assert.deepEqual(await page.locator('.segmented').first().locator('button').allInnerTexts().then((t) => t.map((x) => x.trim())), ['Lieferung', 'Abholung']);
+  assert.deepEqual(await page.locator('.fee .chip').allInnerTexts(), ['1,80', '2,50', '3,50']);
+  await page.getByLabel('Lieferkosten frei eingeben').fill('4');
+  await page.getByLabel('Lieferkosten frei eingeben').blur();
+  assert.match(await page.locator('.total-row.grand').innerText(), /55,45/); // freier Betrag 4,00
+  await page.locator('.fee .chip', { hasText: '2,50' }).click();
   await page.getByPlaceholder('Notiz zur Bestellung').fill('19:30 Uhr');
-  assert.match(await page.locator('.total-row.grand').innerText(), /53,45/); // 22,40 + 2×12,90 + 3,25 + 2,00
+  assert.match(await page.locator('.total-row.grand').innerText(), /53,95/); // 22,40 + 2×12,90 + 3,25 + 2,50
   await shot('kasse-bestellung');
 
   await page.getByRole('button', { name: /Abschließen ·/ }).click();
-  await page.locator('.chip', { hasText: '60,00' }).click();
-  assert.match(await page.locator('.change').innerText(), /6,55/);
+  assert.match(await page.locator('.checkout-total').innerText(), /53,95/);
+  assert.equal(await page.locator('.modal', { hasText: /Rückgeld|Gegeben/ }).count(), 0, 'keine Rückgeld-Funktion');
   await shot('abschluss');
   await page.getByRole('button', { name: 'Abschließen & drucken' }).click();
   await toast('Bestellung #1 gespeichert und gedruckt');
@@ -122,7 +127,7 @@ try {
   // --- Bestellübersicht, Nachdruck, Storno ------------------------------------------------------
   await nav('Bestellungen');
   await page.locator('.order-row').first().waitFor();
-  assert.match(await page.locator('.summary .stat').innerText(), /53,45/);
+  assert.match(await page.locator('.summary .stat').innerText(), /53,95/);
   await shot('bestellungen');
   await page.locator('.order-row').first().click();
   await page.locator('.receipt-preview canvas').waitFor();

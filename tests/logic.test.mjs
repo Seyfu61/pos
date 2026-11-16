@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { compareNr, eur, fold, normPhone, parseEur } from '../js/lib/util.js';
-import { daySummary, extraPrice, lineTotal, orderTotals, sameLine } from '../js/lib/order.js';
+import { ORDER_TYPES, daySummary, extraPrice, lineTotal, orderTotals, sameLine } from '../js/lib/order.js';
 import { CATEGORIES, PRODUCTS } from '../js/data/menu.js';
 import { mergeSettings } from '../js/data/defaults.js';
 
@@ -58,6 +58,23 @@ test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   assert.equal(cat('Extras Burger').extras, null);
 });
 
+test('Speisekarte: Tippfehler der Quelle sind korrigiert', () => {
+  const all = PRODUCTS.flatMap((p) => [p.name, p.desc, ...p.v.map((v) => v[0])]).join('\n');
+  for (const typo of ['Ananans', 'Staggioni', 'Meditarrene', 'Speiegelei', 'Röstzwiebelen', 'Schmlezkäse', 'Cheesburger', 'Mayonaise', 'knackigerSalat', 'mir Käse', 'Wasser Stil', '0,5 ml', 'Chilli', 'Tzaziki', 'Jalapenos']) {
+    assert.ok(!all.includes(typo), `noch enthalten: ${typo}`);
+  }
+  const names = PRODUCTS.map((p) => p.name);
+  for (const name of ['Pizza Quattro Stagioni', 'Pizza Mediterrane', 'Spiegelei', 'Röstzwiebeln', 'Chili-Cheeseburger', 'BBQ-Bacon-Cheeseburger', 'Wasser still', 'Gyros (2) mit Zaziki']) {
+    assert.ok(names.includes(name), `fehlt: ${name}`);
+  }
+  assert.deepEqual(PRODUCTS.find((p) => p.name === 'Wasser still').v, [['0,5 l', 175]]);
+  assert.deepEqual(PRODUCTS.find((p) => p.name === 'Artischocken').v.map((v) => v[0]), ['30cm', '40cm', '40x60cm']);
+});
+
+test('Bestellarten: nur Lieferung und Abholung', () => {
+  assert.deepEqual(Object.keys(ORDER_TYPES), ['delivery', 'pickup']);
+});
+
 test('Extras richten sich nach der Größe', () => {
   const pizza = PRODUCTS.find((p) => p.nr === '220');
   const calzone = PRODUCTS.find((p) => p.nr === '260');
@@ -66,7 +83,6 @@ test('Extras richten sich nach der Größe', () => {
   assert.equal(extraPrice(extra('Zwiebeln'), pizza, 1), 250);
   assert.equal(extraPrice(extra('Gyros (2)'), pizza, 2), 500);
   assert.equal(extraPrice(extra('Käserand'), pizza, 2), 250, 'Einheitspreis');
-  // Artischocken sind in der Quelle mit 28cm/32cm beschriftet -> Zuordnung über die Position
   assert.equal(extraPrice(extra('Artischocken'), pizza, 1), 250);
   assert.equal(extraPrice(extra('Thunfisch'), calzone, 0), 200, 'Calzone = 30cm');
 });
@@ -125,4 +141,9 @@ test('Einstellungen: gespeicherte Werte überschreiben Voreinstellungen, neue Fe
   assert.equal(s.printer.driver, 'webprnt');
   assert.equal(s.printer.paper, 80);
   assert.equal(mergeSettings(undefined).order.defaultType, 'delivery');
+  assert.deepEqual(mergeSettings(undefined).order.deliveryFees, [180, 250, 350]);
+  assert.equal(mergeSettings(undefined).printer.mapsQr, true);
+  // Stände aus der ersten Version werden angeglichen, eigene Werte bleiben
+  assert.deepEqual(mergeSettings({ order: { deliveryFees: [0, 100, 200, 300], defaultType: 'dinein' } }).order, { defaultType: 'delivery', deliveryFees: [180, 250, 350], deliveryTax: 7 });
+  assert.deepEqual(mergeSettings({ order: { deliveryFees: [150, 400] } }).order.deliveryFees, [150, 400]);
 });
