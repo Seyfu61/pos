@@ -1,0 +1,333 @@
+// Durchgehender Test im echten Browser (benötigt Playwright + Chromium):
+//
+//   node tests/e2e.mjs [ordner-für-screenshots]
+//
+// Startet Webserver und Drucker-Attrappe selbst, spielt einen Abend an der Kasse durch
+// und prüft, was am "Drucker" ankommt.
+
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { startMockPrinter } from '../tools/mock-printer.mjs';
+
+const { chromium } = createRequire(import.meta.url)('playwright');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const shots = process.argv[2] ?? (await mkdtemp(path.join(tmpdir(), 'kasse-e2e-')));
+await mkdir(shots, { recursive: true });
+const APP = 'http://localhost:8097/';
+const PRINTER_PORT = 8098;
+
+const server = spawn(process.execPath, [path.join(root, 'tools/serve.mjs'), '8097'], { stdio: 'ignore' });
+const printer = await startMockPrinter({ port: PRINTER_PORT, outDir: path.join(shots, 'bons'), log: () => {} });
+await new Promise((r) => setTimeout(r, 500));
+
+const browser = await chromium.launch();
+const problems = [];
+let step = 0;
+let page;
+const shot = async (name) => page.screenshot({ path: path.join(shots, `${String(++step).padStart(2, '0')}-${name}.png`) });
+const nav = (label) => page.locator('.rail-btn', { hasText: label }).click();
+const toast = (text) => page.locator('.toast', { hasText: text }).first().waitFor({ timeout: 8000 });
+
+try {
+  const ctx = await browser.newContext({ viewport: { width: 1180, height: 820 }, hasTouch: true, locale: 'de-DE' });
+  page = await ctx.newPage();
+  page.on('pageerror', (e) => problems.push(`Seitenfehler: ${e.message}`));
+  page.on('console', (m) => m.type() === 'error' && problems.push(`Konsole: ${m.text()}`));
+  page.on('dialog', (d) => d.accept());
+  await page.goto(APP);
+  await page.locator('.product').first().waitFor();
+  await shot('kasse-leer');
+
+  // --- Drucker einrichten + Testdruck ---------------------------------------------------
+  await nav('Einstellungen');
+  await page.locator('.segmented button', { hasText: 'Drucker' }).click();
+  await page.locator('select.input').selectOption('webprnt');
+  await page.getByPlaceholder('192.168.178.50').fill(`localhost:${PRINTER_PORT}`);
+  await page.getByPlaceholder('192.168.178.50').blur();
+  await page.getByLabel('Kassenschublade bei Barzahlung öffnen').check();
+  await page.getByRole('button', { name: 'Testdruck' }).click();
+  await toast('Testdruck gesendet');
+  assert.equal(printer.jobs.length, 1, 'Testdruck kommt am Drucker an');
+  assert.match(printer.jobs[0].contentType, /^text\/xml/);
+  assert.deepEqual(printer.jobs[0].elements.map((e) => e.tag), ['initialization', 'bitimage', 'cutpaper']);
+  assert.equal(printer.jobs[0].elements[1].attrs.width, '576');
+  await shot('drucker');
+
+  // --- Kunden importieren (Excel-typisch: Semikolon, Windows-1252) -------------------------
+  const csv = [
+    'Kd-Nr;Vorname;Nachname;Telefon;Mobil;Straße;Hausnr;PLZ;Ort;Bemerkung',
+    '1001;Jürgen;Müller;05509 12345;;Göttinger Straße;12a;37124;Rosdorf;Hinterhaus',
+    '1002;Ayse;Yilmaz;0551/998877;0170 1234567;Am Markt;3;37124;Obernjesa;',
+    '1003;;Autohaus Schröder;+49 5509 4711;;Industriestr.;8;37133;Friedland;"Tor 2; bitte klingeln"',
+  ].join('\r\n');
+  const csvFile = path.join(shots, 'kunden.csv');
+  await writeFile(csvFile, Buffer.from(csv, 'latin1'));
+  await nav('Kunden');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Importieren' }).click();
+  await (await chooser).setFiles(csvFile);
+  await page.getByRole('button', { name: '3 Kunden importieren' }).waitFor();
+  await shot('import-zuordnung');
+  await page.getByRole('button', { name: '3 Kunden importieren' }).click();
+  await toast('Import fertig: 3 neu');
+  await page.locator('.customer-row', { hasText: 'Jürgen Müller' }).waitFor();
+  assert.match(await page.locator('.customer-row', { hasText: 'Jürgen Müller' }).innerText(), /Göttinger Straße 12a, 37124 Rosdorf/);
+  await shot('kunden');
+
+  // --- Bestellung aufnehmen ---------------------------------------------------------------
+  await nav('Kasse');
+  const search = page.getByPlaceholder('Artikel-Nr. oder Name');
+  await search.fill('220');
+  await search.press('Enter'); // Pizza Margherita -> Größenauswahl
+  await page.locator('.variant', { hasText: '40cm' }).first().click();
+  await page.locator('.extra', { hasText: 'Käserand' }).click();
+  await page.locator('.extra', { hasText: 'Zwiebeln' }).click();
+  await page.getByPlaceholder('z. B. ohne Zwiebeln').fill('gut durchgebacken');
+  await shot('artikel-dialog');
+  assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /22,40/); // 17,40 + 2,50 + 2,50
+  await page.locator('.modal-foot .btn.primary').click();
+
+  await page.locator('.cat', { hasText: 'XXL Burger' }).click();
+  await page.locator('.product', { hasText: 'Cheesehamburger' }).click(); // eine Größe -> direkt auf den Bon
+  await page.locator('.product', { hasText: 'Cheesehamburger' }).click();
+  await page.locator('.cat', { hasText: 'Getränke' }).click();
+  await page.locator('.product', { hasText: 'Fanta' }).click();
+  await page.locator('.variant', { hasText: '1,0 l' }).click();
+  await page.locator('.modal-foot .btn.primary').click();
+
+  await page.locator('.customer-btn').click();
+  await page.getByPlaceholder('Telefonnummer, Name oder Straße').fill('0550912345');
+  await page.locator('.modal .customer-row', { hasText: 'Jürgen Müller' }).click();
+  await page.locator('.fee .chip', { hasText: '2,00' }).click();
+  await page.getByPlaceholder('Notiz zur Bestellung').fill('19:30 Uhr');
+  assert.match(await page.locator('.total-row.grand').innerText(), /53,45/); // 22,40 + 2×12,90 + 3,25 + 2,00
+  await shot('kasse-bestellung');
+
+  await page.getByRole('button', { name: /Abschließen ·/ }).click();
+  await page.locator('.chip', { hasText: '60,00' }).click();
+  assert.match(await page.locator('.change').innerText(), /6,55/);
+  await shot('abschluss');
+  await page.getByRole('button', { name: 'Abschließen & drucken' }).click();
+  await toast('Bestellung #1 gespeichert und gedruckt');
+
+  const job = printer.jobs[1];
+  assert.deepEqual(job.elements.map((e) => e.tag), ['initialization', 'peripheral', 'bitimage', 'cutpaper', 'bitimage', 'cutpaper'], 'Schublade + Küchenbon + Kundenbon');
+  assert.equal(await page.locator('.ticket-lines .line').count(), 0, 'Bon ist nach dem Abschluss leer');
+
+  // --- Bestellübersicht, Nachdruck, Storno ------------------------------------------------------
+  await nav('Bestellungen');
+  await page.locator('.order-row').first().waitFor();
+  assert.match(await page.locator('.summary .stat').innerText(), /53,45/);
+  await shot('bestellungen');
+  await page.locator('.order-row').first().click();
+  await page.locator('.receipt-preview canvas').waitFor();
+  await shot('bestellung-detail');
+  await page.getByRole('button', { name: 'Kundenbon' }).click();
+  await toast('Kundenbon gedruckt');
+  await page.getByRole('button', { name: 'Stornieren' }).click();
+  await toast('storniert');
+  await page.locator('.modal-head .btn').click();
+  assert.match(await page.locator('.summary .stat').innerText(), /0,00/);
+  assert.match(await page.locator('.order-row').first().innerText(), /storniert/);
+
+  // --- Daten überleben einen Neustart ------------------------------------------------------------
+  await page.reload();
+  await page.locator('.product').first().waitFor();
+  await nav('Kunden');
+  await page.locator('.customer-row').first().waitFor();
+  assert.equal(await page.locator('.customer-row').count(), 3);
+  await nav('Bestellungen');
+  await page.locator('.order-row').first().waitFor();
+  assert.equal(await page.locator('.order-row').count(), 1);
+
+  // --- Hochformat -------------------------------------------------------------------------------
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await nav('Kasse');
+  await page.locator('.product').first().click();
+  await page.locator('.variant').first().waitFor();
+  await shot('hochformat-dialog');
+  await page.locator('.modal-foot .btn.primary').click();
+  await shot('hochformat');
+
+  await ctx.close();
+
+  // ============ Zweiter Durchlauf: ohne Drucker, Fehlerfälle, Verwaltung =======================
+  const ctx2 = await browser.newContext({ viewport: { width: 1366, height: 1024 }, locale: 'de-DE', acceptDownloads: true });
+  page = await ctx2.newPage();
+  page.on('pageerror', (e) => problems.push(`Seitenfehler: ${e.message}`));
+  page.on('console', (m) => m.type() === 'error' && !/Failed to load resource|ERR_CONNECTION_REFUSED|PrintError/.test(m.text()) && problems.push(`Konsole: ${m.text()}`));
+  page.on('dialog', (d) => d.accept());
+  await page.addInitScript(() => {
+    window.__printCalls = 0;
+    window.print = () => window.__printCalls++;
+  });
+  await page.goto(APP);
+  await page.locator('.product').first().waitFor();
+
+  // Neuer Kunde direkt an der Kasse
+  await page.locator('.customer-btn').click();
+  await page.getByPlaceholder('Telefonnummer, Name oder Straße').fill('0551 445566');
+  await page.getByRole('button', { name: /Neuer Kunde/ }).click();
+  const field = (label) => page.locator('.modal .field', { hasText: label }).locator('input');
+  assert.equal(await field('Telefon').first().inputValue(), '0551 445566');
+  await field('Name').fill('Sabine Krüger');
+  await field('Straße und Hausnummer').fill('Lindenweg 4');
+  await field('PLZ').fill('37124');
+  await field('Ort').fill('Rosdorf');
+  await page.getByRole('button', { name: 'Speichern' }).click();
+  await page.locator('.customer-btn.has', { hasText: 'Sabine Krüger' }).waitFor();
+
+  // Artikel direkt, Position bearbeiten (Extras für Burger), freier Artikel
+  await page.locator('.cat', { hasText: 'XXL Burger' }).click();
+  await page.locator('.product', { hasText: 'Baconburger' }).click();
+  await page.locator('.line-main', { hasText: 'Baconburger' }).click();
+  await page.locator('.extra', { hasText: 'Schmelzkäse' }).click();
+  await page.locator('.stepper .btn').last().click();
+  assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /29,40/); // 2 × (13,20 + 1,50)
+  await page.locator('.modal-foot .btn.primary').click();
+  await page.getByRole('button', { name: 'Freier Artikel' }).click();
+  await page.locator('.modal .field', { hasText: 'Bezeichnung' }).locator('input').fill('Tiramisu');
+  await page.locator('.modal .money-input').fill('4,5');
+  await page.locator('.modal-foot .btn.primary').click();
+  await page.locator('.line', { hasText: 'Tiramisu' }).waitFor();
+  assert.match(await page.locator('.total-row.grand').innerText(), /33,90/);
+  // Menge über die Bon-Zeile: + und wieder −, dann Position löschen
+  const tira = page.locator('.line', { hasText: 'Tiramisu' });
+  await tira.locator('.qty-btn').last().click();
+  assert.match(await page.locator('.total-row.grand').innerText(), /38,40/);
+  await tira.locator('.qty-btn').first().click();
+  await tira.locator('.qty-btn').first().click();
+  assert.equal(await page.locator('.line').count(), 1);
+  await shot('kasse-gross');
+
+  // Abschluss ohne Drucker
+  await page.locator('.segmented button', { hasText: 'Abholung' }).click();
+  await page.getByRole('button', { name: /Abschließen ·/ }).click();
+  await page.locator('.segmented button', { hasText: 'Karte' }).click();
+  await page.getByRole('button', { name: 'Abschließen', exact: true }).click();
+  await toast('kein Drucker eingerichtet');
+
+  // Tagesbericht als Vorschau
+  await nav('Bestellungen');
+  await page.locator('.order-row').first().waitFor();
+  await page.getByRole('button', { name: 'Tagesbericht' }).click();
+  await page.locator('.receipt-preview canvas').waitFor();
+  await shot('tagesbericht-vorschau');
+  await page.locator('.modal-head .btn').click();
+
+  // Erneut bestellen -> zurück an der Kasse mit Kunde und Artikeln
+  await page.locator('.order-row').first().click();
+  await page.getByRole('button', { name: 'Erneut bestellen' }).click();
+  await page.locator('.customer-btn.has', { hasText: 'Sabine Krüger' }).waitFor();
+  assert.equal(await page.locator('.line').count(), 1);
+
+  // Drucker nicht erreichbar: Bestellung bleibt gespeichert, verständliche Meldung
+  await nav('Einstellungen');
+  await page.locator('.segmented button', { hasText: 'Drucker' }).click();
+  await page.locator('select.input').selectOption('webprnt');
+  await page.getByPlaceholder('192.168.178.50').fill('localhost:9');
+  await page.getByPlaceholder('192.168.178.50').blur();
+  await nav('Kasse');
+  await page.getByRole('button', { name: /Abschließen ·/ }).click();
+  await page.getByRole('button', { name: 'Abschließen & drucken' }).click();
+  await toast('ist gespeichert, aber: Drucker nicht erreichbar');
+  await nav('Bestellungen');
+  await page.locator('.order-row').nth(1).waitFor();
+
+  // AirPrint: Druckdialog wird mit dem Bon als Bild aufgerufen
+  await nav('Einstellungen');
+  await page.locator('.segmented button', { hasText: 'Drucker' }).click();
+  await page.locator('select.input').selectOption('system');
+  await page.getByRole('button', { name: 'Testdruck' }).click();
+  await toast('Testdruck gesendet');
+  assert.equal(await page.evaluate(() => window.__printCalls), 1);
+  assert.equal(await page.locator('#print-root img').count(), 1);
+
+  // Star webPRNT Browser: Auftrag geht über die Schnittstelle der App, Antwort über _onFinish
+  await page.evaluate(() => {
+    window.__appJobs = [];
+    window.webkit = {
+      messageHandlers: {
+        sendMessageHandler: {
+          postMessage(json) {
+            const job = JSON.parse(json);
+            window.__appJobs.push(job);
+            setTimeout(() => window._onFinish({ url: job.url, htmlCode: 200, response: '&lt;root&gt;&lt;success&gt;true&lt;/success&gt;&lt;code&gt;0&lt;/code&gt;&lt;status&gt;23860000000400000000&lt;/status&gt;&lt;/root&gt;' }), 50);
+          },
+        },
+      },
+    };
+    Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) webPRNTSupportMessageHandler WebPRNTSupportHTTPS' });
+  });
+  await page.locator('select.input').selectOption('browser');
+  await page.getByRole('button', { name: 'Testdruck' }).click();
+  await toast('Testdruck gesendet');
+  await toast('Papierrolle ist fast leer');
+  const appJob = await page.evaluate(() => window.__appJobs[0]);
+  assert.equal(appJob.url, 'http://localhost:8001/StarWebPRNT/SendMessage');
+  assert.match(appJob.body, /^<StarWebPrint xmlns="http:\/\/www\.star-m\.jp"[^>]*><Request>&lt;root&gt;&lt;initialization\/&gt;&lt;bitimage width="576" height="\d+"&gt;[A-Za-z0-9+/=]+&lt;\/bitimage&gt;&lt;cutpaper feed="true"\/&gt;&lt;\/root&gt;<\/Request><\/StarWebPrint>$/);
+  await page.locator('select.input').selectOption('none');
+
+  // Speisekarte: Preis ändern, neuen Artikel anlegen, an der Kasse sichtbar
+  await page.locator('.segmented button', { hasText: 'Speisekarte' }).click();
+  await page.locator('tr', { hasText: 'Pizza Margherita' }).click();
+  await page.locator('.variant-row .money-input').first().fill('9,90');
+  await page.getByRole('button', { name: 'Speichern' }).click();
+  await page.locator('tr', { hasText: '30cm: 9,90' }).waitFor();
+  await page.getByRole('button', { name: 'Artikel', exact: true }).click();
+  await page.locator('.modal .field', { hasText: 'Artikelnummer' }).locator('input').fill('299');
+  await page.locator('.modal .field', { hasText: 'Name' }).locator('input').fill('Pizza Spezial');
+  await page.locator('.variant-row .money-input').fill('13');
+  await page.getByRole('button', { name: 'Speichern' }).click();
+  await page.locator('tr', { hasText: 'Pizza Spezial' }).waitFor();
+  await shot('speisekarte');
+  await nav('Kasse');
+  await page.getByPlaceholder('Artikel-Nr. oder Name').fill('299');
+  await page.getByPlaceholder('Artikel-Nr. oder Name').press('Enter');
+  await page.locator('.line', { hasText: 'Pizza Spezial' }).waitFor();
+  await page.getByPlaceholder('Artikel-Nr. oder Name').fill('margh');
+  assert.match(await page.locator('.product').first().innerText(), /ab 9,90/);
+
+  // Datensicherung: erstellen, Daten verändern, wieder einlesen
+  await nav('Einstellungen');
+  await page.locator('.segmented button', { hasText: 'Daten' }).click();
+  const dl = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Sicherung erstellen' }).click();
+  const backupFile = path.join(shots, 'sicherung.json');
+  await (await dl).saveAs(backupFile);
+  await nav('Kunden');
+  await page.locator('.customer-row', { hasText: 'Sabine Krüger' }).click();
+  await page.getByRole('button', { name: 'Löschen' }).click();
+  await page.locator('.empty.big').waitFor();
+  await nav('Einstellungen');
+  await page.locator('.segmented button', { hasText: 'Daten' }).click();
+  const chooser2 = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Sicherung einlesen' }).click();
+  await (await chooser2).setFiles(backupFile);
+  await toast('Sicherung eingelesen');
+  await nav('Kunden');
+  await page.locator('.customer-row', { hasText: 'Sabine Krüger' }).waitFor();
+  const csvDl = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exportieren' }).click();
+  assert.match((await csvDl).suggestedFilename(), /^kunden-\d{4}-\d\d-\d\d\.csv$/);
+  await nav('Bestellungen');
+  await page.locator('.order-row').nth(1).waitFor();
+  assert.equal(await page.locator('.order-row').count(), 2);
+
+  assert.deepEqual(problems, [], 'keine Fehler in der Browser-Konsole');
+  console.log(`OK – ${printer.jobs.length} Druckaufträge, Screenshots und Bons in ${shots}`);
+} catch (e) {
+  if (page) await shot('FEHLER').catch(() => {});
+  console.error(e);
+  if (problems.length) console.error(problems);
+  process.exitCode = 1;
+} finally {
+  await browser.close();
+  printer.server.close();
+  server.kill();
+}

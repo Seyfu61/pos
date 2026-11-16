@@ -1,0 +1,13 @@
+{
+  "name": "pos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kasse (POS) als Web-App für das iPad mit Star mC-Print3 Bondrucker",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "test": "node --test \"tests/*.test.mjs\"",
+    "test:e2e": "node tests/e2e.mjs",
+    "menu": "node tools/fetch-menu.mjs"
+  }
+}

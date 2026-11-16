@@ -1,0 +1,141 @@
+#!/usr/bin/env node
+// Liest die Speisekarte von bringstar.jetzt aus und erzeugt js/data/menu.js neu.
+//
+//   node tools/fetch-menu.mjs                 (lädt die Seite)
+//   node tools/fetch-menu.mjs seite.html      (nutzt eine gespeicherte HTML-Datei)
+//
+// Achtung: In der App geänderte Preise/Artikel bleiben erhalten, bis in den
+// Einstellungen "Speisekarte zurücksetzen" gewählt wird.
+
+import { readFile, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const SOURCE_URL = 'https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice';
+const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'js', 'data', 'menu.js');
+
+// Welche Kategorie liefert die Extras für welche Kategorie (Zuordnung über den Namen).
+const EXTRAS_RULES = [
+  { extras: /^extras \(pizza\)$/i, for: /^(pizza|calzone)$/i },
+  { extras: /^extras burger$/i, for: /burger$/i },
+  { extras: /^pasta extras$/i, for: /^pasta$/i },
+  { extras: /^pizzabrötchen extra$/i, for: /^pizzabrötchen$/i },
+];
+const DRINKS = /getränk/i; // 19 % MwSt., alles andere 7 %
+
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', euro: '€' };
+
+function clean(s) {
+  return s
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&([a-z]+);/gi, (m, n) => ENTITIES[n.toLowerCase()] ?? m)
+    .replace(/ /g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function parseMenu(html) {
+  const categories = [];
+  const byId = new Map();
+  for (const m of html.matchAll(/<h[34] class="[^"]*anchor[^"]*" id="(\d+)">(.*?)<\/h[34]>/gs)) {
+    const cat = { id: +m[1], name: clean(m[2]), items: [] };
+    categories.push(cat);
+    byId.set(cat.id, cat);
+  }
+  const problems = [];
+  const rowRe = /<tr class="dish-row" data-dish-id="(\d+)" data-dish-category-id="(\d+)"[^>]*>(.*?)<\/tr>/gs;
+  for (const m of html.matchAll(rowRe)) {
+    const [, dishId, catId, body] = m;
+    const tds = [...body.matchAll(/<td[^>]*>(.*?)<\/td>/gs)].map((t) => t[1]);
+    const title = /<div class="dish-title">(.*?)<\/div>/s.exec(tds[0] ?? '');
+    const cat = byId.get(+catId);
+    if (tds.length !== 2 || !title || !cat) {
+      problems.push(`Gericht ${dishId}: unerwarteter Aufbau`);
+      continue;
+    }
+    const nr = clean(title[1].split('<span')[0]).replace(/\.$/, '');
+    const name = clean(/<span class="supMixtures">(.*?)<\/span>/s.exec(title[1])?.[1] ?? title[1]);
+    const desc = clean(tds[0].slice(title.index + title[0].length));
+    const variants = [];
+    for (const d of tds[1].matchAll(/<div class="[^"]*">(.*?)<\/div>/gs)) {
+      const txt = clean(d[1]);
+      const p = /^(?:(.*?) - )?(\d+),(\d{2}) €$/.exec(txt);
+      if (!p) {
+        problems.push(`Gericht ${dishId} (${name}): Preis nicht lesbar: "${txt}"`);
+        continue;
+      }
+      variants.push([p[1] ?? '', +p[2] * 100 + +p[3]]);
+    }
+    if (!variants.length) {
+      problems.push(`Gericht ${dishId} (${name}): kein Preis`);
+      continue;
+    }
+    const item = { id: +dishId, nr, name, desc, v: variants };
+    // Die Quelle listet manche Gerichte doppelt – identische Einträge nur einmal übernehmen.
+    const same = (o) => JSON.stringify([o.nr, o.name, o.desc, o.v]) === JSON.stringify([nr, name, desc, variants]);
+    if (cat.items.some(same)) continue;
+    cat.items.push(item);
+  }
+  for (const cat of categories) {
+    cat.tax = DRINKS.test(cat.name) ? 19 : 7;
+    cat.isExtras = EXTRAS_RULES.some((r) => r.extras.test(cat.name));
+    const rule = !cat.isExtras && EXTRAS_RULES.find((r) => r.for.test(cat.name));
+    const extras = rule && categories.find((c) => rule.extras.test(c.name));
+    cat.extras = extras ? extras.id : null;
+  }
+  return { categories, problems };
+}
+
+function render({ categories }, fetchedAt) {
+  const cats = categories.map(({ items, ...c }) => c);
+  const products = categories.flatMap((c) => c.items.map((i) => ({ id: i.id, cat: c.id, nr: i.nr, name: i.name, desc: i.desc, v: i.v })));
+  const lines = [
+    '// Automatisch erzeugt von tools/fetch-menu.mjs – nicht von Hand bearbeiten.',
+    `// Quelle: ${SOURCE_URL}`,
+    `export const MENU_SOURCE = ${JSON.stringify({ url: SOURCE_URL, fetchedAt })};`,
+    '',
+    '// tax: MwSt.-Satz in %, extras: Kategorie mit den passenden Extras, isExtras: reine Extras-Kategorie',
+    'export const CATEGORIES = [',
+    ...cats.map((c) => `  ${JSON.stringify(c)},`),
+    '];',
+    '',
+    '// v: Varianten als [Bezeichnung, Preis in Cent]',
+    'export const PRODUCTS = [',
+    ...products.map((p) => `  ${JSON.stringify(p)},`),
+    '];',
+    '',
+  ];
+  return { text: lines.join('\n'), count: products.length };
+}
+
+async function main() {
+  const file = process.argv[2];
+  let html;
+  if (file) {
+    html = await readFile(file, 'utf8');
+  } else {
+    const res = await fetch(SOURCE_URL, { headers: { 'user-agent': 'Mozilla/5.0 (menu-import)' } });
+    if (!res.ok) throw new Error(`Abruf fehlgeschlagen: HTTP ${res.status}`);
+    html = await res.text();
+  }
+  const menu = parseMenu(html);
+  if (!menu.categories.length) throw new Error('Keine Kategorien gefunden – hat sich der Seitenaufbau geändert?');
+  const { text, count } = render(menu, new Date().toISOString().slice(0, 10));
+  await writeFile(OUT, text);
+  console.log(`${menu.categories.length} Kategorien, ${count} Artikel -> ${path.relative(process.cwd(), OUT)}`);
+  for (const c of menu.categories) console.log(`  ${String(c.items.length).padStart(3)}  ${c.name}`);
+  if (menu.problems.length) {
+    console.warn('\nHinweise:');
+    for (const p of menu.problems) console.warn('  - ' + p);
+    process.exitCode = 1;
+  }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((e) => {
+    console.error(e.message);
+    process.exit(1);
+  });
+}
