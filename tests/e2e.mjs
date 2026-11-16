@@ -155,7 +155,14 @@ try {
   await toast('Bestellung #1 gespeichert und gedruckt');
 
   const job = printer.jobs[1];
-  assert.deepEqual(job.elements.map((e) => e.tag), ['initialization', 'peripheral', 'bitimage', 'cutpaper', 'bitimage', 'cutpaper'], 'Schublade + Küchenbon + Kundenbon');
+  assert.deepEqual(
+    job.elements.map((e) => e.tag),
+    ['initialization', 'peripheral', ...Array(4).fill(['bitimage', 'cutpaper']).flat()],
+    'Schublade + Bon Pizzaseite + Bon Küchenseite + 2 Kundenbons',
+  );
+  const images = job.elements.filter((e) => e.tag === 'bitimage');
+  assert.equal(images[2].text, images[3].text, 'die beiden Kundenbons sind identisch');
+  assert.notEqual(images[0].text, images[1].text);
   assert.equal(await page.locator('.ticket-lines .line').count(), 0, 'Bon ist nach dem Abschluss leer');
 
   // --- Bestellübersicht, Nachdruck, Storno ------------------------------------------------------
@@ -168,6 +175,10 @@ try {
   await shot('bestellung-detail');
   await page.getByRole('button', { name: 'Kundenbon' }).click();
   await toast('Kundenbon gedruckt');
+  assert.equal(printer.jobs.at(-1).elements.filter((e) => e.tag === 'bitimage').length, 1, 'Nachdruck: ein Kundenbon');
+  await page.getByRole('button', { name: 'Küchenbons' }).click();
+  await toast('Küchenbons gedruckt');
+  assert.equal(printer.jobs.at(-1).elements.filter((e) => e.tag === 'bitimage').length, 2, 'Nachdruck: Pizzaseite + Küchenseite');
   await page.getByRole('button', { name: 'Stornieren' }).click();
   await toast('storniert');
   await page.locator('.modal-head .btn').click();
@@ -250,6 +261,15 @@ try {
   await page.locator('.segmented button', { hasText: 'Karte' }).click();
   await page.getByRole('button', { name: 'Abschließen', exact: true }).click();
   await toast('kein Drucker eingerichtet');
+
+  // Küchenbons als Vorschau: nur Burger bestellt -> nur ein Bon (Küchenseite)
+  await nav('Bestellungen');
+  await page.locator('.order-row').first().click();
+  await page.getByRole('button', { name: 'Küchenbons' }).click();
+  await page.locator('.modal-sm .receipt-preview canvas').first().waitFor();
+  assert.equal(await page.locator('.modal-sm .receipt-preview canvas').count(), 1);
+  await page.locator('.modal-sm .modal-head .btn').click();
+  await page.locator('.modal-head .btn').click();
 
   // Tagesbericht als Vorschau
   await nav('Bestellungen');

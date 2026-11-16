@@ -3,7 +3,7 @@
 import * as db from './db.js';
 import { clone, dayKey, normPhone, uid } from './util.js';
 import { indexCustomer } from './csv.js';
-import { ORDER_TYPES, orderTotals, sameLine } from './order.js';
+import { ORDER_TYPES, categoryStation, orderTotals, sameLine } from './order.js';
 import { DEFAULT_SETTINGS, mergeSettings } from '../data/defaults.js';
 import { CATEGORIES, MENU_SOURCE, PRODUCTS } from '../data/menu.js';
 
@@ -163,6 +163,7 @@ export function makeLine(product, variantIndex = 0, { qty = 1, extras = [], note
     unitPrice: price,
     qty,
     tax: product.tax ?? cat?.tax ?? 7,
+    station: categoryStation(cat),
     extras,
     note: note.trim(),
   };

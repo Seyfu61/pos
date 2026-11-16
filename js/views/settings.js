@@ -3,7 +3,7 @@
 import { html, useMemo, useState, CanvasView, Field, Icon, Modal, MoneyInput, Segmented, TextInput, pickFile, saveFile, useAppState } from '../lib/ui.js';
 import * as store from '../lib/store.js';
 import { compareNr, dayKey, eur, fmtDayKey, parseEur } from '../lib/util.js';
-import { ORDER_TYPES } from '../lib/order.js';
+import { ORDER_TYPES, STATION_SIDES, categoryStation } from '../lib/order.js';
 import { DRIVERS, openDrawer, printReceipts, renderReceipt } from '../print/index.js';
 import { endpointUrl } from '../print/webprnt.js';
 import { paperDots } from '../print/raster.js';
@@ -82,11 +82,14 @@ function PrinterTab() {
           <//>
           <label class="check field"><input type="checkbox" checked=${p.https} onChange=${(e) => set({ https: e.target.checked })} /> Verschlüsselt verbinden (HTTPS)</label>`}
 
+        <div class="field"><span class="field-label">Kundenbon – Anzahl je Bestellung</span>
+          <${Segmented} options=${[1, 2, 3].map((n) => ({ value: n, label: `${n}×` }))} value=${p.customerCopies ?? 1} onChange=${(customerCopies) => set({ customerCopies })} />
+        </div>
         <div class="field"><span class="field-label">Papierbreite</span>
           <${Segmented} options=${[{ value: 80, label: '80 mm (mC-Print3)' }, { value: 58, label: '58 mm' }]} value=${p.paper} onChange=${(paper) => set({ paper })} />
         </div>
         <div class="field wide">
-          <label class="check"><input type="checkbox" checked=${p.printKitchen} onChange=${(e) => set({ printKitchen: e.target.checked })} /> Küchenbon standardmäßig drucken</label>
+          <label class="check"><input type="checkbox" checked=${p.printKitchen} onChange=${(e) => set({ printKitchen: e.target.checked })} /> Küchenbons standardmäßig drucken (Pizzaseite und Küchenseite getrennt)</label>
           <label class="check"><input type="checkbox" checked=${p.printCustomer} onChange=${(e) => set({ printCustomer: e.target.checked })} /> Kundenbon standardmäßig drucken</label>
           <label class="check"><input type="checkbox" checked=${p.mapsQr !== false} onChange=${(e) => set({ mapsQr: e.target.checked })} /> Google-Maps-QR-Code mit der Lieferadresse auf dem Kundenbon</label>
           ${star && html`<label class="check"><input type="checkbox" checked=${p.drawer} onChange=${(e) => set({ drawer: e.target.checked })} /> Kassenschublade bei Barzahlung öffnen</label>`}
@@ -235,6 +238,9 @@ function CategoryForm({ category, onClose }) {
       <div class="field wide"><span class="field-label">MwSt.-Satz</span>
         <${Segmented} options=${[{ value: 7, label: '7 %' }, { value: 19, label: '19 %' }]} value=${c.tax} onChange=${(tax) => setC({ ...c, tax })} />
       </div>
+      <div class="field wide"><span class="field-label">Küchenbon</span>
+        <${Segmented} options=${Object.entries(STATION_SIDES).map(([value, label]) => ({ value, label }))} value=${categoryStation(c)} onChange=${(station) => setC({ ...c, station })} />
+      </div>
       <label class="field wide"><span class="field-label">Extras aus Kategorie</span>
         <select class="input" value=${c.extras ?? ''} onChange=${(e) => setC({ ...c, extras: menu.categories.find((x) => String(x.id) === e.target.value)?.id ?? null })}>
           <option value="">– keine –</option>
@@ -269,7 +275,7 @@ function MenuTab() {
     </nav>
     ${cat &&
     html`<div class="row-head sub">
-        <span class="muted">MwSt. ${cat.tax} %${cat.extras != null ? ` · Extras aus „${menu.categories.find((c) => c.id === cat.extras)?.name ?? '?'}“` : ''}</span>
+        <span class="muted">MwSt. ${cat.tax} % · Küchenbon: ${STATION_SIDES[categoryStation(cat)]}${cat.extras != null ? ` · Extras aus „${menu.categories.find((c) => c.id === cat.extras)?.name ?? '?'}“` : ''}</span>
         <button class="btn small" onClick=${() => setCatForm(cat)}><${Icon} name="edit" size=${16} /> Kategorie bearbeiten</button>
       </div>
       <div class="table-wrap">

@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS = {
     paper: 80, // Papierbreite in mm (mC-Print3: 80, mC-Print2: 58)
     drawer: false, // Kassenschublade bei Barzahlung öffnen
     printCustomer: true,
+    customerCopies: 2, // Anzahl Kundenbons je Bestellung
     printKitchen: true,
     mapsQr: true, // Google-Maps-QR-Code mit der Lieferadresse auf dem Kundenbon
   },

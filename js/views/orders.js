@@ -4,19 +4,21 @@ import { html, useEffect, useMemo, useState, CanvasView, Icon, Modal, useAppStat
 import * as store from '../lib/store.js';
 import { dayKey, eur, fmtDayKey, fmtTime } from '../lib/util.js';
 import { ORDER_TYPES, PAYMENTS, daySummary } from '../lib/order.js';
-import { customerReceipt, dayReport, kitchenTicket } from '../print/receipt.js';
+import { customerReceipt, dayReport, kitchenTickets } from '../print/receipt.js';
 import { printReceipts, renderReceipt } from '../print/index.js';
 
 const TYPE_ICON = { delivery: 'truck', pickup: 'bag' };
 
 /** Drucken – oder, wenn kein Drucker eingerichtet ist, Vorschau anzeigen. */
 export async function printOrPreview(blocks, title, settings, setPreview) {
+  // Ein einzelner Bon (Blockliste) oder mehrere Bons (Liste von Blocklisten)
+  const lists = Array.isArray(blocks[0]) ? blocks : [blocks];
   if (settings.printer.driver === 'none') {
-    setPreview({ title, canvas: renderReceipt(blocks, settings) });
+    setPreview({ title, canvases: lists.map((b) => renderReceipt(b, settings)) });
     return;
   }
   try {
-    const res = await printReceipts([blocks], settings);
+    const res = await printReceipts(lists, settings);
     store.toast(`${title} gedruckt.`, 'ok');
     if (res.paperNearEnd) store.toast('Hinweis: Die Papierrolle ist fast leer.', 'info', 7000);
   } catch (e) {
@@ -28,7 +30,7 @@ export async function printOrPreview(blocks, title, settings, setPreview) {
 export function PreviewModal({ preview, onClose }) {
   return html`<${Modal} title=${preview.title} size="sm" onClose=${onClose}>
     <p class="muted small">Vorschau – es ist noch kein Drucker eingerichtet (Einstellungen › Drucker).</p>
-    <${CanvasView} canvas=${preview.canvas} />
+    ${preview.canvases.map((canvas) => html`<${CanvasView} canvas=${canvas} />`)}
   <//>`;
 }
 
@@ -39,7 +41,7 @@ function shiftDay(key, delta) {
 }
 
 function OrderDetail({ order, onClose, onChanged, setPreview }) {
-  const { settings } = useAppState();
+  const { settings, menu } = useAppState();
   const canvas = useMemo(() => renderReceipt(customerReceipt(order, settings), settings), [order, settings]);
   const cancelled = order.status === 'cancelled';
 
@@ -57,7 +59,7 @@ function OrderDetail({ order, onClose, onChanged, setPreview }) {
       ${!cancelled && html`<button class="btn danger ghost" onClick=${cancel}><${Icon} name="x" /> Stornieren</button>`}
       <span class="spacer"></span>
       <button class="btn" onClick=${() => (store.reorder(order), onClose())}><${Icon} name="repeat" /> Erneut bestellen</button>
-      <button class="btn" onClick=${() => printOrPreview(kitchenTicket(order), 'Küchenbon', settings, setPreview)}><${Icon} name="printer" /> Küchenbon</button>
+      <button class="btn" onClick=${() => printOrPreview(kitchenTickets(order, menu.categories), 'Küchenbons', settings, setPreview)}><${Icon} name="printer" /> Küchenbons</button>
       <button class="btn primary" onClick=${() => printOrPreview(customerReceipt(order, settings), 'Kundenbon', settings, setPreview)}><${Icon} name="printer" /> Kundenbon</button>
     `}
   >

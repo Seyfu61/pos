@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildRequest, bytesToBase64, drawerRequest, endpointUrl, envelope, packMono, parseResponse, paperNearEnd, statusMessages } from '../js/print/webprnt.js';
-import { customerReceipt, dayReport, kitchenTicket, mapsUrl, testPage } from '../js/print/receipt.js';
+import { customerReceipt, dayReport, kitchenTickets, mapsUrl, testPage } from '../js/print/receipt.js';
 import { monoToPng, parseJob } from '../tools/mock-printer.mjs';
 import { mergeSettings } from '../js/data/defaults.js';
-import { daySummary } from '../js/lib/order.js';
+import { categoryStation, daySummary, lineStation } from '../js/lib/order.js';
 
 const px = (black) => (black ? [0, 0, 0, 255] : [255, 255, 255, 255]);
 
@@ -91,15 +91,16 @@ const order = {
   type: 'delivery',
   customer: { name: 'Jürgen Müller', street: 'Göttinger Straße 12a', zip: '37124', city: 'Rosdorf', phone: '05509 12345', note: 'Hinterhaus' },
   lines: [
-    { nr: '220', name: 'Pizza Margherita', variant: '40cm', unitPrice: 1740, qty: 2, tax: 7, extras: [{ name: 'Käserand', price: 250 }], note: 'ohne Zwiebeln' },
+    { nr: '220', name: 'Pizza Margherita', variant: '40cm', unitPrice: 1740, qty: 2, tax: 7, station: 'pizza', extras: [{ name: 'Käserand', price: 250 }], note: 'ohne Zwiebeln' },
+    { nr: '101', name: 'Cheesehamburger', variant: '', unitPrice: 1290, qty: 1, tax: 7, station: 'kitchen', extras: [{ name: 'Bacon', price: 200 }], note: '' },
     { nr: '', name: 'Fanta', variant: '1,0 l', unitPrice: 325, qty: 1, tax: 19, extras: [], note: '' },
   ],
   note: '19:30 Uhr',
-  itemsTotal: 4305,
+  itemsTotal: 5795,
   deliveryFee: 200,
-  total: 4505,
+  total: 5995,
   taxes: [
-    { rate: 7, gross: 4180, net: 3907, tax: 273 },
+    { rate: 7, gross: 5670, net: 5299, tax: 371 },
     { rate: 19, gross: 325, net: 273, tax: 52 },
   ],
   payment: 'cash',
@@ -112,8 +113,8 @@ test('Kundenbon enthält alle Angaben', () => {
     'Pizza Haus & mehr', 'Steintorstraße 1b', 'Tel. 05509 999440', 'St.-Nr. 20/123/45678', 'Bon-Nr. 42', '16.11.2026 18:32', 'LIEFERUNG  #7',
     'Jürgen Müller', 'Göttinger Straße 12a', '37124 Rosdorf', 'Hinweis: Hinterhaus', '» 19:30 Uhr',
     '2x 220 Pizza Margherita 40cm', '34,80', '+ Käserand', '5,00', '» ohne Zwiebeln', '1x Fanta 1,0 l', '3,25',
-    'Zwischensumme', '43,05', 'Lieferkosten', '2,00', 'SUMME', '45,05 €', 'Zahlung', 'Bar',
-    '7 %', '39,07', '2,73', '41,80', '19 %', '0,52', 'Guten Appetit!',
+    '1x 101 Cheesehamburger', '12,90', '+ Bacon', 'Zwischensumme', '57,95', 'Lieferkosten', '2,00', 'SUMME', '59,95 €', 'Zahlung', 'Bar',
+    '7 %', '52,99', '3,71', '56,70', '19 %', '2,73', '0,52', 'Guten Appetit!',
   ]) {
     assert.ok(t.includes(expected), `fehlt: ${expected}`);
   }
@@ -121,7 +122,7 @@ test('Kundenbon enthält alle Angaben', () => {
   assert.ok(texts(customerReceipt({ ...order, status: 'cancelled' }, mergeSettings())).includes('STORNIERT'));
   assert.ok(!t.includes('Rückgeld') && !t.includes('Gegeben'));
   // Abholung: keine Adresse, keine Lieferkosten
-  const pickup = texts(customerReceipt({ ...order, type: 'pickup', deliveryFee: 0, total: 4305, payment: 'card' }, mergeSettings()));
+  const pickup = texts(customerReceipt({ ...order, type: 'pickup', deliveryFee: 0, total: 5795, payment: 'card' }, mergeSettings()));
   assert.ok(pickup.includes('ABHOLUNG  #7') && pickup.includes('Karte') && pickup.includes('Jürgen Müller'));
   assert.ok(!pickup.includes('Göttinger Straße 12a') && !pickup.includes('Lieferkosten'));
   // Bestellungen mit einer früher vorhandenen Bestellart lassen sich weiterhin drucken
@@ -144,20 +145,63 @@ test('Lieferbon trägt einen Google-Maps-QR-Code zur Adresse', () => {
   assert.equal(qr({ ...order, customer: { name: 'Laufkunde' } }).length, 0, 'nicht ohne Adresse');
   assert.equal(qr({ ...order, customer: null }).length, 0);
   assert.equal(qr(order, mergeSettings({ printer: { mapsQr: false } })).length, 0, 'abschaltbar');
-  assert.equal(kitchenTicket(order).filter((b) => b.t === 'qr').length, 0, 'nicht auf dem Küchenbon');
+  assert.equal(kitchenTickets(order).flat().filter((b) => b.t === 'qr').length, 0, 'nicht auf den Küchenbons');
 });
 
-test('Küchenbon: Artikel, Extras, Notizen – keine Preise', () => {
-  const t = texts(kitchenTicket(order));
-  for (const expected of ['#7  LIEFERUNG', 'Jürgen Müller · Rosdorf', '» 19:30 Uhr', '2x 220 Pizza Margherita 40cm', '+ Käserand', '» ohne Zwiebeln', '1x Fanta 1,0 l', '3 Artikel']) {
-    assert.ok(t.includes(expected), `fehlt: ${expected}`);
+test('Küchenbons: Pizzaseite und Küchenseite getrennt, mit Hinweis auf die andere Seite', () => {
+  const tickets = kitchenTickets(order);
+  assert.equal(tickets.length, 2);
+  const [pizza, kitchen] = tickets.map(texts);
+
+  for (const expected of ['PIZZA  #7', 'LIEFERUNG', 'Jürgen Müller · Rosdorf', '» 19:30 Uhr', '2x 220 Pizza Margherita 40cm', '+ Käserand', '» ohne Zwiebeln', '2 Artikel', 'Außerdem bei KÜCHE:', '1x 101 Cheesehamburger', '1x Fanta 1,0 l']) {
+    assert.ok(pizza.includes(expected), `Pizzaseite, fehlt: ${expected}`);
   }
-  assert.ok(!t.some((x) => /\d,\d\d( €)?$/.test(x) && !/l$/.test(x)), 'keine Preise');
+  for (const expected of ['KÜCHE  #7', 'LIEFERUNG', '» 19:30 Uhr', '1x 101 Cheesehamburger', '+ Bacon', '1x Fanta 1,0 l', '2 Artikel', 'Außerdem bei PIZZA:', '2x 220 Pizza Margherita 40cm']) {
+    assert.ok(kitchen.includes(expected), `Küchenseite, fehlt: ${expected}`);
+  }
+  // Eigene Artikel groß, die der anderen Seite klein und ohne Extras/Notizen
+  const size = (blocks, t) => blocks.find((b) => b.text === t)?.size;
+  assert.equal(size(tickets[0], '2x 220 Pizza Margherita 40cm'), 'l');
+  assert.equal(size(tickets[0], '1x 101 Cheesehamburger'), 's');
+  assert.equal(size(tickets[1], '2x 220 Pizza Margherita 40cm'), 's');
+  assert.equal(size(tickets[1], '1x 101 Cheesehamburger'), 'l');
+  assert.ok(!kitchen.includes('+ Käserand') && !kitchen.includes('» ohne Zwiebeln') && !pizza.includes('+ Bacon'));
+  for (const t of [pizza, kitchen]) assert.ok(!t.some((x) => /\d,\d\d( €)?$/.test(x) && !/l$/.test(x)), 'keine Preise');
+});
+
+test('Küchenbons: nur die betroffene Seite bekommt einen Bon', () => {
+  const only = (pred) => kitchenTickets({ ...order, lines: order.lines.filter(pred) });
+  const pizzaOnly = only((l) => l.station === 'pizza');
+  assert.equal(pizzaOnly.length, 1);
+  assert.ok(texts(pizzaOnly[0]).includes('PIZZA  #7') && texts(pizzaOnly[0]).includes('Nichts bei Küche.'));
+  const kitchenOnly = only((l) => l.station !== 'pizza');
+  assert.equal(kitchenOnly.length, 1);
+  assert.ok(texts(kitchenOnly[0]).includes('KÜCHE  #7') && texts(kitchenOnly[0]).includes('Nichts bei Pizza.'));
+  assert.deepEqual(kitchenTickets({ ...order, lines: [] }), []);
+});
+
+test('Küchenbons: Station kommt von der Position, sonst von der Kategorie', () => {
+  const categories = [
+    { id: 1, name: 'Pizza' },
+    { id: 2, name: 'Calzone' },
+    { id: 3, name: 'Pizzabrötchen' },
+    { id: 4, name: 'XXL Burger' },
+    { id: 5, name: 'Salat', station: 'pizza' }, // in den Einstellungen umgestellt
+    { id: 6, name: 'Pizza-Baguette', station: 'kitchen' },
+  ];
+  const l = (o) => ({ nr: '', name: 'X', variant: '', qty: 1, extras: [], ...o });
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 99, null].map((catId) => lineStation(l({ catId }), categories)), ['pizza', 'pizza', 'pizza', 'kitchen', 'pizza', 'kitchen', 'kitchen', 'kitchen']);
+  assert.equal(lineStation(l({ catId: 4, station: 'pizza' }), categories), 'pizza', 'an der Position gemerkt');
+  assert.equal(categoryStation({ name: 'Extras (Pizza)' }), 'pizza');
+  assert.equal(categoryStation({ name: 'Getränke' }), 'kitchen');
+  assert.equal(categoryStation(undefined), 'kitchen');
+  const [pizza] = kitchenTickets({ ...order, lines: [l({ catId: 2, name: 'Calzone Salami' }), l({ catId: 4, name: 'Hamburger' })] }, categories);
+  assert.ok(texts(pizza).includes('1x Calzone Salami') && texts(pizza).includes('Außerdem bei KÜCHE:'));
 });
 
 test('Tagesbericht und Testseite lassen sich aufbauen', () => {
   const t = texts(dayReport('2026-11-16', daySummary([order, { ...order, status: 'cancelled' }]), mergeSettings()));
-  for (const expected of ['TAGESBERICHT 16.11.2026', 'UMSATZ', '45,05 €', 'Bar (1)', 'Lieferung (1)', 'Storniert (1)', '2x 220 Pizza Margherita 40cm']) {
+  for (const expected of ['TAGESBERICHT 16.11.2026', 'UMSATZ', '59,95 €', 'Bar (1)', 'Lieferung (1)', 'Storniert (1)', '2x 220 Pizza Margherita 40cm']) {
     assert.ok(t.includes(expected), `fehlt: ${expected}`);
   }
   assert.ok(texts(testPage(mergeSettings(), 576)).includes('TESTDRUCK'));

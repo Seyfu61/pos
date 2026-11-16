@@ -56,6 +56,9 @@ test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   assert.equal(cat('Calzone').extras, cat('Extras (Pizza)').id);
   assert.equal(cat('XXL Burger').extras, cat('Extras Burger').id);
   assert.equal(cat('Extras Burger').extras, null);
+  // Küchenbon-Station: alles rund um Pizza an die Pizzaseite, der Rest an die Küchenseite
+  assert.deepEqual(CATEGORIES.filter((c) => c.station === 'pizza').map((c) => c.name), ['Pizza', 'Extras (Pizza)', 'Calzone', 'Pizzabrötchen', 'Pizzabrötchen Extra']);
+  assert.ok(CATEGORIES.every((c) => c.station === 'pizza' || c.station === 'kitchen'));
 });
 
 test('Speisekarte: Tippfehler der Quelle sind korrigiert', () => {
@@ -143,6 +146,8 @@ test('Einstellungen: gespeicherte Werte überschreiben Voreinstellungen, neue Fe
   assert.equal(mergeSettings(undefined).order.defaultType, 'delivery');
   assert.deepEqual(mergeSettings(undefined).order.deliveryFees, [180, 250, 350]);
   assert.equal(mergeSettings(undefined).printer.mapsQr, true);
+  assert.equal(mergeSettings(undefined).printer.customerCopies, 2);
+  assert.equal(mergeSettings({ printer: { driver: 'webprnt' } }).printer.customerCopies, 2, 'auch bei schon gespeicherten Einstellungen');
   // Stände aus der ersten Version werden angeglichen, eigene Werte bleiben
   assert.deepEqual(mergeSettings({ order: { deliveryFees: [0, 100, 200, 300], defaultType: 'dinein' } }).order, { defaultType: 'delivery', deliveryFees: [180, 250, 350], deliveryTax: 7 });
   assert.deepEqual(mergeSettings({ order: { deliveryFees: [150, 400] } }).order.deliveryFees, [150, 400]);

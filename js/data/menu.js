@@ -1,23 +1,24 @@
 // Automatisch erzeugt von tools/fetch-menu.mjs – nicht von Hand bearbeiten.
 // Quelle: https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice
-export const MENU_SOURCE = {"url":"https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice","fetchedAt":"2026-11-16","rev":"ziu9o9"};
+export const MENU_SOURCE = {"url":"https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice","fetchedAt":"2026-11-16","rev":"rzqozb"};
 
-// tax: MwSt.-Satz in %, extras: Kategorie mit den passenden Extras, isExtras: reine Extras-Kategorie
+// tax: MwSt.-Satz in %, extras: Kategorie mit den passenden Extras, isExtras: reine Extras-Kategorie,
+// station: auf welchem Küchenbon die Artikel stehen (pizza | kitchen)
 export const CATEGORIES = [
-  {"id":259,"name":"Pizza","tax":7,"isExtras":false,"extras":269},
-  {"id":269,"name":"Extras (Pizza)","tax":7,"isExtras":true,"extras":null},
-  {"id":260,"name":"Calzone","tax":7,"isExtras":false,"extras":269},
-  {"id":258,"name":"XXL Burger","tax":7,"isExtras":false,"extras":807},
-  {"id":807,"name":"Extras Burger","tax":7,"isExtras":true,"extras":null},
-  {"id":255,"name":"Gyros vom Spieß","tax":7,"isExtras":false,"extras":null},
-  {"id":254,"name":"Pasta","tax":7,"isExtras":false,"extras":275},
-  {"id":275,"name":"Pasta Extras","tax":7,"isExtras":true,"extras":null},
-  {"id":253,"name":"Chicken Nuggets und Chicken Wings","tax":7,"isExtras":false,"extras":null},
-  {"id":256,"name":"Salat","tax":7,"isExtras":false,"extras":null},
-  {"id":261,"name":"Pizzabrötchen","tax":7,"isExtras":false,"extras":272},
-  {"id":272,"name":"Pizzabrötchen Extra","tax":7,"isExtras":true,"extras":null},
-  {"id":257,"name":"Beilagen","tax":7,"isExtras":false,"extras":null},
-  {"id":276,"name":"Getränke","tax":19,"isExtras":false,"extras":null},
+  {"id":259,"name":"Pizza","tax":7,"isExtras":false,"station":"pizza","extras":269},
+  {"id":269,"name":"Extras (Pizza)","tax":7,"isExtras":true,"station":"pizza","extras":null},
+  {"id":260,"name":"Calzone","tax":7,"isExtras":false,"station":"pizza","extras":269},
+  {"id":258,"name":"XXL Burger","tax":7,"isExtras":false,"station":"kitchen","extras":807},
+  {"id":807,"name":"Extras Burger","tax":7,"isExtras":true,"station":"kitchen","extras":null},
+  {"id":255,"name":"Gyros vom Spieß","tax":7,"isExtras":false,"station":"kitchen","extras":null},
+  {"id":254,"name":"Pasta","tax":7,"isExtras":false,"station":"kitchen","extras":275},
+  {"id":275,"name":"Pasta Extras","tax":7,"isExtras":true,"station":"kitchen","extras":null},
+  {"id":253,"name":"Chicken Nuggets und Chicken Wings","tax":7,"isExtras":false,"station":"kitchen","extras":null},
+  {"id":256,"name":"Salat","tax":7,"isExtras":false,"station":"kitchen","extras":null},
+  {"id":261,"name":"Pizzabrötchen","tax":7,"isExtras":false,"station":"pizza","extras":272},
+  {"id":272,"name":"Pizzabrötchen Extra","tax":7,"isExtras":true,"station":"pizza","extras":null},
+  {"id":257,"name":"Beilagen","tax":7,"isExtras":false,"station":"kitchen","extras":null},
+  {"id":276,"name":"Getränke","tax":19,"isExtras":false,"station":"kitchen","extras":null},
 ];
 
 // v: Varianten als [Bezeichnung, Preis in Cent]

@@ -4,7 +4,7 @@ import { html, useEffect, useMemo, useRef, useState, Icon, Modal, MoneyInput, Se
 import * as store from '../lib/store.js';
 import { compareNr, eur, fold, uid } from '../lib/util.js';
 import { ORDER_TYPES, PAYMENTS, extraPrice, lineTotal } from '../lib/order.js';
-import { customerReceipt, kitchenTicket } from '../print/receipt.js';
+import { customerReceipt, kitchenTickets } from '../print/receipt.js';
 import { printReceipts } from '../print/index.js';
 import { CustomerPicker } from './customers.js';
 
@@ -143,7 +143,8 @@ function CustomItem({ onClose }) {
 // --- Abschluss ------------------------------------------------------------------------
 
 function Checkout({ onClose }) {
-  const { cart, settings } = useAppState();
+  const { cart, settings, menu } = useAppState();
+  const copies = Math.max(1, settings.printer.customerCopies ?? 1);
   const totals = store.cartTotals();
   const [payment, setPayment] = useState('cash');
   const [printCustomer, setPrintCustomer] = useState(settings.printer.printCustomer);
@@ -165,8 +166,8 @@ function Checkout({ onClose }) {
     }
     onClose();
     const jobs = [];
-    if (printKitchen) jobs.push(kitchenTicket(order));
-    if (printCustomer) jobs.push(customerReceipt(order, settings));
+    if (printKitchen) jobs.push(...kitchenTickets(order, menu.categories));
+    if (printCustomer) for (let i = 0; i < copies; i++) jobs.push(customerReceipt(order, settings));
     try {
       const res = await printReceipts(jobs, settings, { drawer: payment === 'cash' });
       store.toast(`Bestellung #${order.dayNr} gespeichert${res.printed ? ' und gedruckt' : hasPrinter ? '' : ' (kein Drucker eingerichtet)'}.`, 'ok');
@@ -190,8 +191,8 @@ function Checkout({ onClose }) {
     <h3 class="section-title">Zahlung</h3>
     <${Segmented} options=${Object.entries(PAYMENTS).map(([value, label]) => ({ value, label }))} value=${payment} onChange=${setPayment} />
     <h3 class="section-title">Drucken</h3>
-    <label class="check"><input type="checkbox" checked=${printKitchen} onChange=${(e) => setPrintKitchen(e.target.checked)} /> Küchenbon</label>
-    <label class="check"><input type="checkbox" checked=${printCustomer} onChange=${(e) => setPrintCustomer(e.target.checked)} /> Kundenbon</label>
+    <label class="check"><input type="checkbox" checked=${printKitchen} onChange=${(e) => setPrintKitchen(e.target.checked)} /> Küchenbons (Pizza und Küche getrennt)</label>
+    <label class="check"><input type="checkbox" checked=${printCustomer} onChange=${(e) => setPrintCustomer(e.target.checked)} /> Kundenbon${copies > 1 ? ` (${copies}×)` : ''}</label>
     ${!hasPrinter && html`<p class="muted small">Noch kein Drucker eingerichtet – die Bestellung wird gespeichert und kann später unter „Bestellungen“ gedruckt werden.</p>`}
   <//>`;
 }

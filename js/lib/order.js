@@ -5,6 +5,29 @@ export const ORDER_TYPES = {
   pickup: 'Abholung',
 };
 
+// Küchenbons werden nach Station getrennt gedruckt.
+export const STATIONS = {
+  pizza: 'Pizza',
+  kitchen: 'Küche',
+};
+
+export const STATION_SIDES = {
+  pizza: 'Pizzaseite',
+  kitchen: 'Küchenseite',
+};
+
+/** Station einer Kategorie; ohne Angabe entscheidet der Name (Pizza, Calzone, Pizzabrötchen -> Pizzaseite). */
+export function categoryStation(cat) {
+  if (STATIONS[cat?.station]) return cat.station;
+  return /pizza|calzone/i.test(cat?.name ?? '') ? 'pizza' : 'kitchen';
+}
+
+/** Station einer Bon-Position (an der Position gemerkt, sonst über ihre Kategorie). */
+export function lineStation(line, categories = []) {
+  if (STATIONS[line.station]) return line.station;
+  return categoryStation(categories.find((c) => c.id === line.catId));
+}
+
 export const PAYMENTS = {
   cash: 'Bar',
   card: 'Karte',

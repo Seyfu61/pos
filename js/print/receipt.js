@@ -10,7 +10,7 @@
 //   { t:'rule', dashed } / { t:'space', h }
 
 import { eur, fmtDateTime, fmtDayKey } from '../lib/util.js';
-import { ORDER_TYPES, PAYMENTS } from '../lib/order.js';
+import { ORDER_TYPES, PAYMENTS, STATIONS, lineStation } from '../lib/order.js';
 
 const text = (t, o = {}) => ({ t: 'text', text: t, ...o });
 const row = (left, right, o = {}) => ({ t: 'row', left, right, ...o });
@@ -103,25 +103,47 @@ export function customerReceipt(order, settings) {
   return b;
 }
 
-/** Küchenbon: große Schrift, keine Preise */
-export function kitchenTicket(order) {
-  const b = [];
-  b.push(box(`#${order.dayNr}  ${typeLabel(order)}`, { size: 'xl' }));
-  b.push(space(6), row(fmtDateTime(order.createdAt), `Bon-Nr. ${order.bonNr}`, { size: 's' }));
-  const c = order.customer;
-  if (c?.name) b.push(text([c.name, order.type === 'delivery' ? c.city : ''].filter(Boolean).join(' · '), { bold: true }));
-  if (order.note) b.push(text(`» ${order.note}`, { bold: true, size: 'l' }));
-  b.push(rule());
-  order.lines.forEach((l, i) => {
-    if (i) b.push(rule({ dashed: true }));
-    b.push(text(`${l.qty}x ${lineTitle(l)}`, { bold: true, size: 'l' }));
-    for (const e of l.extras ?? []) b.push(text(`+ ${e.name}`, { size: 'l', indent: 28 }));
-    if (l.note) b.push(text(`» ${l.note}`, { size: 'l', bold: true, indent: 28 }));
-  });
-  b.push(rule());
-  const n = order.lines.reduce((s, l) => s + l.qty, 0);
-  b.push(text(`${n} Artikel`, { align: 'center' }), space(8));
-  return b;
+/**
+ * Küchenbons: je ein Bon für Pizzaseite und Küchenseite (große Schrift, keine Preise).
+ * Unter den eigenen Artikeln steht klein, was die andere Seite für dieselbe Bestellung macht,
+ * damit beide Seiten sich abstimmen können. Stationen ohne Artikel bekommen keinen Bon.
+ */
+export function kitchenTickets(order, categories = []) {
+  const groups = Object.fromEntries(Object.keys(STATIONS).map((s) => [s, []]));
+  for (const l of order.lines) groups[lineStation(l, categories)].push(l);
+  const count = (lines) => lines.reduce((n, l) => n + l.qty, 0);
+  const tickets = [];
+  for (const station of Object.keys(STATIONS)) {
+    const lines = groups[station];
+    if (!lines.length) continue;
+    const b = [];
+    b.push(box(`${STATIONS[station].toUpperCase()}  #${order.dayNr}`, { size: 'xl' }));
+    b.push(space(4), text(typeLabel(order), { align: 'center', size: 'l', bold: true }));
+    b.push(row(fmtDateTime(order.createdAt), `Bon-Nr. ${order.bonNr}`, { size: 's' }));
+    const c = order.customer;
+    if (c?.name) b.push(text([c.name, order.type === 'delivery' ? c.city : ''].filter(Boolean).join(' · '), { bold: true }));
+    if (order.note) b.push(text(`» ${order.note}`, { bold: true, size: 'l' }));
+    b.push(rule());
+    lines.forEach((l, i) => {
+      if (i) b.push(rule({ dashed: true }));
+      b.push(text(`${l.qty}x ${lineTitle(l)}`, { bold: true, size: 'l' }));
+      for (const e of l.extras ?? []) b.push(text(`+ ${e.name}`, { size: 'l', indent: 28 }));
+      if (l.note) b.push(text(`» ${l.note}`, { size: 'l', bold: true, indent: 28 }));
+    });
+    b.push(rule());
+    b.push(text(`${count(lines)} Artikel`, { align: 'center' }));
+    for (const other of Object.keys(STATIONS).filter((s) => s !== station)) {
+      if (groups[other].length) {
+        b.push(rule({ dashed: true }), text(`Außerdem bei ${STATIONS[other].toUpperCase()}:`, { bold: true, size: 's' }));
+        for (const l of groups[other]) b.push(text(`${l.qty}x ${lineTitle(l)}`, { size: 's' }));
+      } else {
+        b.push(text(`Nichts bei ${STATIONS[other]}.`, { align: 'center', size: 's' }));
+      }
+    }
+    b.push(space(8));
+    tickets.push(b);
+  }
+  return tickets;
 }
 
 /** Tagesbericht */

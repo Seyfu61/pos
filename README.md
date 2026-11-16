@@ -14,7 +14,9 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt und ohne Server – alle Daten lie
   Artikelnummern, Größen und Preisen; Tippfehler der Quelle werden beim Import korrigiert
   (Liste in `tools/fetch-menu.mjs`). In den Einstellungen bearbeitbar.
 - **Kunden**: Suche nach Telefonnummer, Name oder Straße; Anlegen direkt an der Kasse; **CSV-Import** mit Spaltenzuordnung.
-- **Bons**: Küchenbon (groß, ohne Preise) und Kundenbon (mit Adresse, MwSt.-Ausweis), Nachdruck, Storno, Tagesbericht.
+- **Bons**: Küchenbons getrennt für **Pizzaseite** und **Küchenseite** (groß, ohne Preise; darunter klein, was die
+  jeweils andere Seite für dieselbe Bestellung macht) und Kundenbon (mit Adresse, MwSt.-Ausweis, standardmäßig 2×).
+  Welche Kategorie auf welchem Küchenbon steht, lässt sich je Kategorie einstellen. Nachdruck, Storno, Tagesbericht.
   Bei Lieferungen steht auf dem Kundenbon ein **QR-Code**, der in Google Maps die Route zur Lieferadresse öffnet.
 - **Offline**: als App auf dem Home-Bildschirm installierbar, läuft auch ohne Internet.
 

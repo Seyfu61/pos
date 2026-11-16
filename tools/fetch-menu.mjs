@@ -22,6 +22,7 @@ const EXTRAS_RULES = [
   { extras: /^pizzabrötchen extra$/i, for: /^pizzabrötchen$/i },
 ];
 const DRINKS = /getränk/i; // 19 % MwSt., alles andere 7 %
+const PIZZA_STATION = /pizza|calzone/i; // Küchenbon "Pizzaseite"; alles andere geht an die Küchenseite
 
 // Tippfehler der Quelle, die beim Import korrigiert werden (Namen und Beschreibungen).
 const TEXT_FIXES = [
@@ -133,6 +134,7 @@ export function parseMenu(html) {
   for (const cat of categories) {
     cat.tax = DRINKS.test(cat.name) ? 19 : 7;
     cat.isExtras = EXTRAS_RULES.some((r) => r.extras.test(cat.name));
+    cat.station = PIZZA_STATION.test(cat.name) ? 'pizza' : 'kitchen';
     const rule = !cat.isExtras && EXTRAS_RULES.find((r) => r.for.test(cat.name));
     const extras = rule && categories.find((c) => rule.extras.test(c.name));
     cat.extras = extras ? extras.id : null;
@@ -157,7 +159,8 @@ function render({ categories }, fetchedAt) {
     `// Quelle: ${SOURCE_URL}`,
     `export const MENU_SOURCE = ${JSON.stringify({ url: SOURCE_URL, fetchedAt, rev: revision([cats, products]) })};`,
     '',
-    '// tax: MwSt.-Satz in %, extras: Kategorie mit den passenden Extras, isExtras: reine Extras-Kategorie',
+    '// tax: MwSt.-Satz in %, extras: Kategorie mit den passenden Extras, isExtras: reine Extras-Kategorie,',
+    '// station: auf welchem Küchenbon die Artikel stehen (pizza | kitchen)',
     'export const CATEGORIES = [',
     ...cats.map((c) => `  ${JSON.stringify(c)},`),
     '];',
