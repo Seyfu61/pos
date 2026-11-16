@@ -26,6 +26,8 @@ const ICONS = {
   user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  keypad: '<path d="M5 5h.01M12 5h.01M19 5h.01M5 12h.01M12 12h.01M19 12h.01M5 19h.01M12 19h.01M19 19h.01" stroke-width="3.2"/>',
+  backspace: '<path d="M21 5H9l-7 7 7 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="m17 9-6 6M11 9l6 6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   minus: '<path d="M5 12h14"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
@@ -88,13 +90,20 @@ export function Field({ label, hint, children, wide }) {
 /** Texteingabe, die erst beim Verlassen des Feldes speichert. */
 export function TextInput({ value, onCommit, ...rest }) {
   const [v, setV] = useState(value ?? '');
-  useEffect(() => setV(value ?? ''), [value]);
+  // Nur nachziehen, wenn sich der gespeicherte Wert wirklich ändert – nicht beim ersten Anzeigen,
+  // sonst könnte eine sofort begonnene Eingabe wieder überschrieben werden.
+  const shown = useRef(value);
+  useEffect(() => {
+    if (shown.current === value) return;
+    shown.current = value;
+    setV(value ?? '');
+  }, [value]);
   return html`<input
     type="text"
     ...${rest}
     value=${v}
     onInput=${(e) => setV(e.target.value)}
-    onBlur=${() => v !== (value ?? '') && onCommit(v)}
+    onBlur=${(e) => e.target.value !== (value ?? '') && onCommit(e.target.value)}
     onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()}
   />`;
 }
@@ -108,7 +117,10 @@ export function MoneyInput({ value, onCommit, onLive, placeholder = '0,00', ...r
   const [v, setV] = useState(show(value));
   const focused = useRef(false);
   // Während des Tippens nicht umformatieren.
+  const shown = useRef(value);
   useEffect(() => {
+    if (shown.current === value) return;
+    shown.current = value;
     if (!focused.current) setV(show(value));
   }, [value]);
   return html`<input
@@ -126,11 +138,13 @@ export function MoneyInput({ value, onCommit, onLive, placeholder = '0,00', ...r
       focused.current = true;
       e.target.select();
     }}
-    onBlur=${() => {
+    onBlur=${(e) => {
       focused.current = false;
-      const c = parseEur(v);
-      setV(show(c ?? (v.trim() === '' ? null : value)));
-      if (c !== value && (c != null || v.trim() === '')) onCommit?.(c);
+      // Wert direkt aus dem Feld lesen – der Zustand kann bei sehr schnellem Verlassen noch hinterherhinken.
+      const text = e.target.value;
+      const c = parseEur(text);
+      setV(show(c ?? (text.trim() === '' ? null : value)));
+      if (c !== value && (c != null || text.trim() === '')) onCommit?.(c);
     }}
     onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()}
   />`;

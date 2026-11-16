@@ -294,8 +294,35 @@ function Ticket({ onEdit, onCustomer, onCheckout }) {
 
 // --- Hauptansicht -----------------------------------------------------------------------
 
+// --- Nummernfeld: Artikelnummern ohne iPad-Tastatur eintippen ---------------------------
+
+function Numpad({ value, letters, target, count, onChange, onEnter }) {
+  const press = (ch) => {
+    document.activeElement?.blur?.(); // eine offene Bildschirmtastatur schließen
+    onChange(value + ch);
+  };
+  const key = (ch) => html`<button class="numkey" onClick=${() => press(ch)}>${ch}</button>`;
+  const clear = html`<button class="numkey fn" disabled=${!value} onClick=${() => onChange('')} aria-label="Eingabe löschen">C</button>`;
+  return html`<aside class="numpad" aria-label="Nummernfeld">
+    <div class="numpad-display ${!value ? 'idle' : !target && !count ? 'none' : ''}">
+      <strong>${value || html`<span class="muted">Artikel-Nr.</span>`}</strong>
+      <span>${!value ? 'Nummer eintippen' : target ? `${target.name} · ${priceLabel(target)}` : count ? `${count} Artikel passen` : 'Kein Artikel gefunden'}</span>
+    </div>
+    <div class="numpad-keys">
+      ${['7', '8', '9', '4', '5', '6', '1', '2', '3'].map(key)}
+      ${letters.length === 1 ? key(letters[0]) : clear} ${key('0')}
+      <button class="numkey fn" disabled=${!value} onClick=${() => onChange(value.slice(0, -1))} aria-label="Letztes Zeichen löschen"><${Icon} name="backspace" size=${26} /></button>
+      ${letters.length > 1 && letters.map(key)}
+    </div>
+    <div class="numpad-actions">
+      ${letters.length === 1 && clear}
+      <button class="btn primary big grow" disabled=${!target} onClick=${onEnter}>Hinzufügen</button>
+    </div>
+  </aside>`;
+}
+
 export function PosView() {
-  const { menu } = useAppState();
+  const { menu, settings } = useAppState();
   const [catId, setCatId] = useState(null);
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState(null); // { product, line }
@@ -323,15 +350,19 @@ export function PosView() {
     else store.addLine(store.makeLine(product));
   };
 
-  const onSearchKey = (e) => {
-    if (e.key !== 'Enter' || !q) return;
-    const exact = products.filter((p) => fold(p.nr) === q);
-    const target = exact.length === 1 ? exact[0] : products.length === 1 ? products[0] : null;
-    if (target) {
-      pick(target);
-      setQuery('');
-    }
+  // Was "Enter" bzw. "Hinzufügen" auswählt: die exakte Artikelnummer, sonst den einzigen Treffer.
+  const exact = q ? products.filter((p) => fold(p.nr) === q) : [];
+  const target = !q ? null : exact.length === 1 ? exact[0] : products.length === 1 ? products[0] : null;
+  const submit = () => {
+    if (!target) return;
+    pick(target);
+    setQuery('');
   };
+  const onSearchKey = (e) => e.key === 'Enter' && submit();
+
+  const numpad = settings.ui.numpad;
+  // Buchstaben, die in Artikelnummern vorkommen (z. B. "a" in 221a), bekommen eine eigene Taste.
+  const letters = useMemo(() => [...new Set(menu.products.flatMap((p) => [...fold(p.nr).replace(/[^a-z]/g, '')]))].sort(), [menu]);
 
   const editLine = (line) => setEditing({ line, product: menu.products.find((p) => p.id === line.productId) });
   const catIndex = (id) => cats.findIndex((c) => c.id === id);
@@ -355,6 +386,14 @@ export function PosView() {
           />
           ${query && html`<button class="btn icon-btn ghost" onClick=${() => (setQuery(''), searchRef.current?.focus())} aria-label="Suche leeren"><${Icon} name="x" /></button>`}
         </div>
+        <button
+          class="btn icon-btn ${numpad ? 'on' : ''}"
+          aria-pressed=${numpad}
+          aria-label=${numpad ? 'Nummernfeld ausblenden' : 'Nummernfeld einblenden'}
+          onClick=${() => store.saveSettings('ui', { numpad: !numpad })}
+        >
+          <${Icon} name="keypad" />
+        </button>
         <button class="btn" onClick=${() => setDialog('custom')}><${Icon} name="plus" /> Freier Artikel</button>
       </div>
       <nav class="cats">
@@ -367,6 +406,7 @@ export function PosView() {
         ${extrasIds.size > 0 &&
         html`<button class="cat plain extras-cat ${!q && showExtras ? 'on' : ''}" onClick=${() => (setCatId(EXTRAS_TAB), setQuery(''))}>Extras</button>`}
       </nav>
+      <div class="pos-body">
       <div class="products">
         ${products.length === 0 && html`<div class="empty"><p>${q ? `Kein Artikel für „${query}“ gefunden.` : 'In dieser Kategorie gibt es keine Artikel.'}</p></div>`}
         ${products.map(
@@ -377,6 +417,8 @@ export function PosView() {
               ${(p.desc || extrasIds.has(p.cat)) && html`<span class="product-desc">${p.desc || cats[catIndex(p.cat)]?.name}</span>`}
             </button>`,
         )}
+      </div>
+      ${numpad && html`<${Numpad} value=${query} letters=${letters} target=${target} count=${q ? products.length : 0} onChange=${setQuery} onEnter=${submit} />`}
       </div>
     </section>
 

@@ -495,8 +495,110 @@ textarea.input {
   border-color: var(--ink);
 }
 
+.pos-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* Nummernfeld */
+.numpad {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 248px;
+  padding: 2px 14px calc(16px + env(safe-area-inset-bottom)) 0;
+}
+.numpad-display {
+  display: grid;
+  gap: 2px;
+  min-height: 78px;
+  align-content: center;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  line-height: 1.2;
+}
+.numpad-display strong {
+  font-size: 30px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.numpad-display span {
+  font-size: 13.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.numpad-display strong + span {
+  color: var(--ok);
+  font-weight: 600;
+}
+.numpad-display.none strong + span {
+  color: var(--accent-dark);
+}
+.numpad-display.idle strong + span {
+  color: var(--muted);
+  font-weight: 400;
+}
+.numpad-display strong .muted {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.numpad-keys {
+  flex: 1;
+  min-height: 0;
+  max-height: 372px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: minmax(48px, 1fr);
+  gap: 7px;
+}
+.numkey {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 28px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.numkey:active {
+  transform: scale(0.96);
+  background: var(--accent-soft);
+}
+.numkey.fn {
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 22px;
+}
+.numkey:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.numpad-actions {
+  display: flex;
+  gap: 7px;
+}
+.numpad-actions .numkey {
+  width: 64px;
+  flex: none;
+}
+.btn.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
 .products {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -1260,6 +1362,25 @@ textarea.input {
   }
   .products {
     grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  }
+  /* Hochformat: Nummernfeld unter der Artikelliste statt daneben */
+  .pos-body {
+    flex-direction: column;
+  }
+  .numpad {
+    width: auto;
+    padding: 8px 14px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+  }
+  .numpad-display {
+    min-height: 0;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    gap: 12px;
+  }
+  .numpad-keys {
+    flex: none;
+    grid-auto-rows: 54px;
   }
   .split,
   .orders-layout {

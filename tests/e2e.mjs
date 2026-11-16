@@ -81,6 +81,40 @@ try {
 
   // --- Bestellung aufnehmen ---------------------------------------------------------------
   await nav('Kasse');
+
+  // Nummernfeld: 221a -> Pizza Andy (Größenauswahl), 101 -> Cheesehamburger direkt, Korrektur mit ⌫ und C
+  const numkey = (ch) => page.locator('.numpad .numkey', { hasText: new RegExp(`^${ch}$`) }).click();
+  const display = page.locator('.numpad-display');
+  for (const ch of ['2', '2', '1']) await numkey(ch);
+  assert.match(await display.innerText(), /221\s+Pizza Prosciutto · ab 10,70/);
+  await numkey('a');
+  assert.match(await display.innerText(), /221a\s+Pizza Andy/);
+  assert.equal(await page.getByPlaceholder('Artikel-Nr. oder Name').inputValue(), '221a', 'Suchfeld und Nummernfeld zeigen dasselbe');
+  await page.locator('.numpad .btn.primary').click();
+  await page.locator('.variant', { hasText: '30cm' }).first().click();
+  await page.locator('.modal-foot .btn.primary').click();
+  await page.locator('.line', { hasText: 'Pizza Andy' }).waitFor();
+  assert.match(await display.innerText(), /Artikel-Nr\./, 'nach dem Hinzufügen wieder leer');
+  for (const ch of ['9', '9']) await numkey(ch);
+  assert.match(await display.innerText(), /Kein Artikel gefunden/);
+  assert.ok(await page.locator('.numpad .btn.primary').isDisabled());
+  await page.getByLabel('Letztes Zeichen löschen').click();
+  await page.getByLabel('Eingabe löschen').click();
+  for (const ch of ['2', '2']) await numkey(ch);
+  assert.match(await display.innerText(), /11 Artikel passen/); // 220–229 und 221a
+  await page.getByLabel('Eingabe löschen').click();
+  for (const ch of ['1', '0', '1']) await numkey(ch);
+  await page.locator('.numpad .btn.primary').click();
+  await page.locator('.line', { hasText: 'Cheesehamburger' }).waitFor();
+  await shot('nummernfeld');
+  // wieder entfernen, damit die folgende Bestellung bei null beginnt
+  await page.locator('.ticket-actions .btn').first().click();
+  assert.equal(await page.locator('.ticket-lines .line').count(), 0);
+  // ausblenden und wieder einblenden; die Einstellung bleibt gespeichert
+  await page.getByLabel('Nummernfeld ausblenden').click();
+  assert.equal(await page.locator('.numpad').count(), 0);
+  await page.getByLabel('Nummernfeld einblenden').click();
+  await page.locator('.numpad').waitFor();
   const search = page.getByPlaceholder('Artikel-Nr. oder Name');
   await search.fill('220');
   await search.press('Enter'); // Pizza Margherita -> Größenauswahl

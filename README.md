@@ -5,7 +5,8 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt und ohne Server – alle Daten lie
 
 ## Was die Kasse kann
 
-- **Kasse**: Artikel antippen oder Artikelnummer eingeben (z. B. `220` + Enter), Größen und Extras wählen,
+- **Kasse**: Artikel antippen oder Artikelnummer über das eingebaute **Nummernfeld** eintippen (z. B. `220`,
+  „Hinzufügen“) – die iPad-Tastatur bleibt dabei zu. Größen und Extras wählen,
   Notiz für die Küche, Lieferung oder Abholung, Lieferkosten (1,80 / 2,50 / 3,50 € oder freier Betrag),
   Bar- oder Kartenzahlung.
 - **Speisekarte**: 163 Artikel in 14 Kategorien, importiert von

@@ -23,6 +23,9 @@ export const DEFAULT_SETTINGS = {
     printKitchen: true,
     mapsQr: true, // Google-Maps-QR-Code mit der Lieferadresse auf dem Kundenbon
   },
+  ui: {
+    numpad: true, // Nummernfeld an der Kasse einblenden
+  },
   order: {
     defaultType: 'delivery',
     deliveryFees: [180, 250, 350], // Schnellauswahl in Cent
