@@ -275,7 +275,7 @@ function MenuTab() {
     </nav>
     ${cat &&
     html`<div class="row-head sub">
-        <span class="muted">MwSt. ${cat.tax} % · Küchenbon: ${STATION_SIDES[categoryStation(cat)]}${cat.extras != null ? ` · Extras aus „${menu.categories.find((c) => c.id === cat.extras)?.name ?? '?'}“` : ''}</span>
+        <span class="muted">MwSt. ${cat.tax} % · ${categoryStation(cat) === 'none' ? 'kein Küchenbon' : `Küchenbon: ${STATION_SIDES[categoryStation(cat)]}`}${cat.extras != null ? ` · Extras aus „${menu.categories.find((c) => c.id === cat.extras)?.name ?? '?'}“` : ''}</span>
         <button class="btn small" onClick=${() => setCatForm(cat)}><${Icon} name="edit" size=${16} /> Kategorie bearbeiten</button>
       </div>
       <div class="table-wrap">

@@ -93,7 +93,7 @@ const order = {
   lines: [
     { nr: '220', name: 'Pizza Margherita', variant: '40cm', unitPrice: 1740, qty: 2, tax: 7, station: 'pizza', extras: [{ name: 'Käserand', price: 250 }], note: 'ohne Zwiebeln' },
     { nr: '101', name: 'Cheesehamburger', variant: '', unitPrice: 1290, qty: 1, tax: 7, station: 'kitchen', extras: [{ name: 'Bacon', price: 200 }], note: '' },
-    { nr: '', name: 'Fanta', variant: '1,0 l', unitPrice: 325, qty: 1, tax: 19, extras: [], note: '' },
+    { nr: '', name: 'Fanta', variant: '1,0 l', unitPrice: 325, qty: 1, tax: 19, station: 'none', extras: [], note: '' },
   ],
   note: '19:30 Uhr',
   itemsTotal: 5795,
@@ -149,24 +149,49 @@ test('Lieferbon trägt einen Google-Maps-QR-Code zur Adresse', () => {
 });
 
 test('Küchenbons: Pizzaseite und Küchenseite getrennt, mit Hinweis auf die andere Seite', () => {
-  const tickets = kitchenTickets(order);
+  const o = {
+    ...order,
+    lines: [
+      ...order.lines,
+      {
+        nr: '340', name: 'Gyros (2)', variant: '', unitPrice: 1390, qty: 1, tax: 7, station: 'kitchen', note: '',
+        extras: [
+          { name: 'Twister Pommes', price: 150, group: 'Pommes', prefix: 'mit' },
+          { name: 'Zwiebeln', price: 0, group: 'Ohne', prefix: 'ohne' },
+        ],
+      },
+    ],
+  };
+  const tickets = kitchenTickets(o);
   assert.equal(tickets.length, 2);
   const [pizza, kitchen] = tickets.map(texts);
 
-  for (const expected of ['PIZZA  #7', 'LIEFERUNG', 'Jürgen Müller · Rosdorf', '» 19:30 Uhr', '2x 220 Pizza Margherita 40cm', '+ Käserand', '» ohne Zwiebeln', '2 Artikel', 'Außerdem bei KÜCHE:', '1x 101 Cheesehamburger', '1x Fanta 1,0 l']) {
+  for (const expected of ['PIZZA  #7', 'LIEFERUNG', 'Jürgen Müller · Rosdorf', '» 19:30 Uhr', '2x 220 Pizza Margherita 40cm', '+ Käserand', '» ohne Zwiebeln', '2 Artikel', 'Außerdem bei KÜCHE:', '1x 101 Cheesehamburger', '1x 340 Gyros (2)']) {
     assert.ok(pizza.includes(expected), `Pizzaseite, fehlt: ${expected}`);
   }
-  for (const expected of ['KÜCHE  #7', 'LIEFERUNG', '» 19:30 Uhr', '1x 101 Cheesehamburger', '+ Bacon', '1x Fanta 1,0 l', '2 Artikel', 'Außerdem bei PIZZA:', '2x 220 Pizza Margherita 40cm']) {
+  for (const expected of ['KÜCHE  #7', 'LIEFERUNG', '» 19:30 Uhr', '1x 101 Cheesehamburger', '+ Bacon', '1x 340 Gyros (2)', 'mit Twister Pommes', 'ohne Zwiebeln', '2 Artikel', 'Außerdem bei PIZZA:', '2x 220 Pizza Margherita 40cm']) {
     assert.ok(kitchen.includes(expected), `Küchenseite, fehlt: ${expected}`);
   }
+  // Getränke stehen auf keinem Küchenbon
+  for (const t of [pizza, kitchen]) assert.ok(!t.some((x) => /Fanta/.test(x)), 'keine Getränke');
   // Eigene Artikel groß, die der anderen Seite klein und ohne Extras/Notizen
   const size = (blocks, t) => blocks.find((b) => b.text === t)?.size;
   assert.equal(size(tickets[0], '2x 220 Pizza Margherita 40cm'), 'l');
   assert.equal(size(tickets[0], '1x 101 Cheesehamburger'), 's');
   assert.equal(size(tickets[1], '2x 220 Pizza Margherita 40cm'), 's');
   assert.equal(size(tickets[1], '1x 101 Cheesehamburger'), 'l');
-  assert.ok(!kitchen.includes('+ Käserand') && !kitchen.includes('» ohne Zwiebeln') && !pizza.includes('+ Bacon'));
+  assert.equal(tickets[1].find((b) => b.text === 'ohne Zwiebeln')?.bold, true, '"ohne" fett');
+  assert.ok(!kitchen.includes('+ Käserand') && !kitchen.includes('» ohne Zwiebeln') && !pizza.includes('+ Bacon') && !pizza.includes('mit Twister Pommes'));
   for (const t of [pizza, kitchen]) assert.ok(!t.some((x) => /\d,\d\d( €)?$/.test(x) && !/l$/.test(x)), 'keine Preise');
+
+  // Kundenbon: Aufpreis mit Betrag, "ohne" ohne Betrag
+  const rows = customerReceipt(o, mergeSettings()).filter((b) => b.t === 'row');
+  assert.deepEqual(rows.find((b) => b.left === 'mit Twister Pommes')?.right, '1,50');
+  assert.deepEqual(rows.find((b) => b.left === 'ohne Zwiebeln')?.right, '');
+});
+
+test('Küchenbons: nur Getränke -> kein Küchenbon', () => {
+  assert.deepEqual(kitchenTickets({ ...order, lines: order.lines.filter((l) => l.station === 'none') }), []);
 });
 
 test('Küchenbons: nur die betroffene Seite bekommt einen Bon', () => {
@@ -174,7 +199,7 @@ test('Küchenbons: nur die betroffene Seite bekommt einen Bon', () => {
   const pizzaOnly = only((l) => l.station === 'pizza');
   assert.equal(pizzaOnly.length, 1);
   assert.ok(texts(pizzaOnly[0]).includes('PIZZA  #7') && texts(pizzaOnly[0]).includes('Nichts bei Küche.'));
-  const kitchenOnly = only((l) => l.station !== 'pizza');
+  const kitchenOnly = only((l) => l.station === 'kitchen');
   assert.equal(kitchenOnly.length, 1);
   assert.ok(texts(kitchenOnly[0]).includes('KÜCHE  #7') && texts(kitchenOnly[0]).includes('Nichts bei Pizza.'));
   assert.deepEqual(kitchenTickets({ ...order, lines: [] }), []);
@@ -190,10 +215,11 @@ test('Küchenbons: Station kommt von der Position, sonst von der Kategorie', () 
     { id: 6, name: 'Pizza-Baguette', station: 'kitchen' },
   ];
   const l = (o) => ({ nr: '', name: 'X', variant: '', qty: 1, extras: [], ...o });
-  assert.deepEqual([1, 2, 3, 4, 5, 6, 99, null].map((catId) => lineStation(l({ catId }), categories)), ['pizza', 'pizza', 'pizza', 'kitchen', 'pizza', 'kitchen', 'kitchen', 'kitchen']);
+  categories.push({ id: 7, name: 'Getränke' });
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 99, null].map((catId) => lineStation(l({ catId }), categories)), ['pizza', 'pizza', 'pizza', 'kitchen', 'pizza', 'kitchen', 'none', 'kitchen', 'kitchen']);
   assert.equal(lineStation(l({ catId: 4, station: 'pizza' }), categories), 'pizza', 'an der Position gemerkt');
   assert.equal(categoryStation({ name: 'Extras (Pizza)' }), 'pizza');
-  assert.equal(categoryStation({ name: 'Getränke' }), 'kitchen');
+  assert.equal(categoryStation({ name: 'Getränke' }), 'none');
   assert.equal(categoryStation(undefined), 'kitchen');
   const [pizza] = kitchenTickets({ ...order, lines: [l({ catId: 2, name: 'Calzone Salami' }), l({ catId: 4, name: 'Hamburger' })] }, categories);
   assert.ok(texts(pizza).includes('1x Calzone Salami') && texts(pizza).includes('Außerdem bei KÜCHE:'));

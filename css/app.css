@@ -964,6 +964,30 @@ textarea.input {
 .extra.on .extra-price {
   color: var(--ok);
 }
+.extras.choice .extra.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.extras.choice .extra.on .extra-price {
+  color: #fff;
+}
+.extras.without .extra.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+.section-title .req {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
 
 .checkout-total {
   display: flex;

@@ -14,17 +14,63 @@ export const STATIONS = {
 export const STATION_SIDES = {
   pizza: 'Pizzaseite',
   kitchen: 'Küchenseite',
+  none: 'kein Küchenbon',
 };
 
-/** Station einer Kategorie; ohne Angabe entscheidet der Name (Pizza, Calzone, Pizzabrötchen -> Pizzaseite). */
+/**
+ * Station einer Kategorie; ohne Angabe entscheidet der Name:
+ * Pizza, Calzone, Pizzabrötchen -> Pizzaseite, Getränke -> kein Küchenbon, alles andere -> Küchenseite.
+ */
 export function categoryStation(cat) {
-  if (STATIONS[cat?.station]) return cat.station;
-  return /pizza|calzone/i.test(cat?.name ?? '') ? 'pizza' : 'kitchen';
+  if (STATION_SIDES[cat?.station]) return cat.station;
+  const name = cat?.name ?? '';
+  if (/getränk/i.test(name)) return 'none';
+  return /pizza|calzone/i.test(name) ? 'pizza' : 'kitchen';
+}
+
+/** Text einer Zusatzangabe an einer Position: "+ Käserand", "mit Twister Pommes", "ohne Zwiebeln". */
+export function extraLabel(e) {
+  return e.prefix ? `${e.prefix} ${e.name}` : `+ ${e.name}`;
+}
+
+/** Vorauswahl der Auswahlgruppen eines Artikels: { Gruppenname: Index | Set von Namen | null } */
+export function defaultSelection(opts = []) {
+  return Object.fromEntries(opts.map((g) => [g.name, g.type === 'many' ? new Set() : (g.default ?? null)]));
+}
+
+/** Auswahl -> Einträge für line.extras ({ name, price, group, prefix }), in der Reihenfolge der Gruppen. */
+export function selectionEntries(opts = [], sel = {}) {
+  const out = [];
+  for (const g of opts) {
+    const picked = g.type === 'many' ? g.choices.filter(([n]) => sel[g.name]?.has(n)) : g.choices[sel[g.name]] ? [g.choices[sel[g.name]]] : [];
+    for (const [name, price] of picked) out.push({ name, price: price ?? 0, group: g.name, prefix: g.prefix ?? '' });
+  }
+  return out;
+}
+
+/** Gespeicherte Einträge einer Position -> Auswahl (zum Bearbeiten). Unbekannte Namen fallen auf die Vorgabe zurück. */
+export function entriesToSelection(opts = [], entries = []) {
+  const sel = defaultSelection(opts);
+  for (const g of opts) {
+    const mine = entries.filter((e) => e.group === g.name);
+    if (!mine.length) continue;
+    if (g.type === 'many') sel[g.name] = new Set(mine.map((e) => e.name).filter((n) => g.choices.some(([c]) => c === n)));
+    else {
+      const i = g.choices.findIndex(([c]) => c === mine[0].name);
+      if (i >= 0) sel[g.name] = i;
+    }
+  }
+  return sel;
+}
+
+/** Pflichtgruppen, in denen noch nichts gewählt ist. */
+export function missingSelection(opts = [], sel = {}) {
+  return opts.filter((g) => g.required && g.type !== 'many' && sel[g.name] == null).map((g) => g.name);
 }
 
 /** Station einer Bon-Position (an der Position gemerkt, sonst über ihre Kategorie). */
 export function lineStation(line, categories = []) {
-  if (STATIONS[line.station]) return line.station;
+  if (STATION_SIDES[line.station]) return line.station;
   return categoryStation(categories.find((c) => c.id === line.catId));
 }
 
@@ -59,7 +105,7 @@ export function lineTotal(line) {
 /** Zwei Positionen sind zusammenfassbar, wenn Artikel, Größe, Extras und Notiz gleich sind. */
 export function sameLine(a, b) {
   const sig = (l) =>
-    JSON.stringify([l.productId, l.name, l.variant, l.unitPrice, l.tax, (l.extras ?? []).map((e) => [e.name, e.price]), l.note ?? '']);
+    JSON.stringify([l.productId, l.name, l.variant, l.unitPrice, l.tax, (l.extras ?? []).map((e) => [e.name, e.price, e.prefix ?? '']), l.note ?? '']);
   return sig(a) === sig(b);
 }
 

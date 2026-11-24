@@ -52,8 +52,26 @@ export function setView(view) {
 
 // --- Start ---------------------------------------------------------------------
 
+export const MENU_SCHEMA = 2;
+
 export function seedMenu() {
-  return { source: MENU_SOURCE, categories: clone(CATEGORIES), products: clone(PRODUCTS).map((p) => ({ ...p, active: true })) };
+  return { schema: MENU_SCHEMA, source: MENU_SOURCE, categories: clone(CATEGORIES), products: clone(PRODUCTS).map((p) => ({ ...p, active: true })) };
+}
+
+/**
+ * Eine von Hand geänderte Speisekarte an neue Funktionen anpassen, ohne eigene Änderungen zu verlieren:
+ * Auswahlmöglichkeiten (Pommes, Zutaten, Sauce) ergänzen, neue eigene Artikel aufnehmen, Getränke vom Küchenbon nehmen.
+ */
+export function migrateMenu(menu, seed = seedMenu()) {
+  if ((menu.schema ?? 1) >= MENU_SCHEMA) return menu;
+  const seedById = new Map(seed.products.map((p) => [p.id, p]));
+  const products = menu.products.map((p) => (p.opts || !seedById.get(p.id)?.opts ? p : { ...p, opts: clone(seedById.get(p.id).opts) }));
+  const known = new Set(menu.products.map((p) => p.id));
+  const cats = new Set(menu.categories.map((c) => c.id));
+  // Eigene Artikel der Kasse haben Text-IDs (bringstar: Zahlen) – die neuen kommen dazu, sofern ihre Kategorie noch existiert.
+  for (const p of seed.products) if (typeof p.id === 'string' && !known.has(p.id) && cats.has(p.cat)) products.push(clone(p));
+  const categories = menu.categories.map((c) => (/getränk/i.test(c.name) && (c.station ?? 'kitchen') === 'kitchen' ? { ...c, station: 'none' } : c));
+  return { ...menu, schema: MENU_SCHEMA, categories, products };
 }
 
 function newCart() {
@@ -66,8 +84,8 @@ export async function init() {
     state.settings = mergeSettings(settings);
     // Neuer Stand der mitgelieferten Speisekarte wird übernommen, solange hier nichts von Hand geändert wurde.
     const outdated = menu && !menu.edited && menu.source?.rev !== MENU_SOURCE.rev;
-    state.menu = menu && !outdated ? menu : seedMenu();
-    if (!menu || outdated) await db.kvSet('menu', state.menu);
+    state.menu = menu && !outdated ? migrateMenu(menu) : seedMenu();
+    if (state.menu !== menu) await db.kvSet('menu', state.menu);
     state.customers = customers.map(indexCustomer);
     state.cart = cart ?? newCart();
     if (!ORDER_TYPES[state.cart.type]) state.cart.type = state.settings.order.defaultType;

@@ -3,7 +3,7 @@
 import { html, useEffect, useMemo, useRef, useState, Icon, Modal, MoneyInput, Segmented, Stepper, useAppState } from '../lib/ui.js';
 import * as store from '../lib/store.js';
 import { compareNr, eur, fold, uid } from '../lib/util.js';
-import { ORDER_TYPES, PAYMENTS, extraPrice, lineTotal } from '../lib/order.js';
+import { ORDER_TYPES, PAYMENTS, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, selectionEntries } from '../lib/order.js';
 import { customerReceipt, kitchenTickets } from '../print/receipt.js';
 import { printReceipts } from '../print/index.js';
 import { CustomerPicker } from './customers.js';
@@ -31,28 +31,40 @@ function LineEditor({ product, line, onClose }) {
     () => (cat?.extras != null ? menu.products.filter((p) => p.cat === cat.extras && p.active !== false) : []),
     [menu, cat],
   );
+  const opts = product?.opts ?? [];
   const [variant, setVariant] = useState(line?.variantIndex ?? 0);
   const [qty, setQty] = useState(line?.qty ?? 1);
   const [note, setNote] = useState(line?.note ?? '');
+  // Auswahl je Gruppe (Pommes, Ohne, Sauce …)
+  const [sel, setSel] = useState(() => entriesToSelection(opts, line?.extras ?? []));
   // Gewählte Extras als Namen – der Preis richtet sich nach der aktuellen Größe.
-  const [chosen, setChosen] = useState(() => new Set((line?.extras ?? []).map((e) => e.name)));
+  const [chosen, setChosen] = useState(() => new Set((line?.extras ?? []).filter((e) => !e.group).map((e) => e.name)));
 
   const priceOf = (extra) => (product ? extraPrice(extra, product, variant) : extra.v[0][1]);
   const extras = [
+    ...selectionEntries(opts, sel),
     ...extrasList.filter((e) => chosen.has(e.name)).map((e) => ({ id: e.id, name: e.name, price: priceOf(e) })),
-    // Extras, die es in der Speisekarte nicht mehr gibt, bleiben an der Position erhalten.
-    ...(line?.extras ?? []).filter((e) => chosen.has(e.name) && !extrasList.some((x) => x.name === e.name)),
+    // Angaben, die es in der Speisekarte nicht mehr gibt, bleiben an der Position erhalten.
+    ...(line?.extras ?? []).filter((e) => (e.group ? !opts.some((g) => g.name === e.group) : chosen.has(e.name) && !extrasList.some((x) => x.name === e.name))),
   ];
   const base = product ? (product.v[variant] ?? product.v[0])[1] : line.unitPrice;
   const total = (base + extras.reduce((s, e) => s + e.price, 0)) * qty;
+  const missing = missingSelection(opts, sel);
 
   const toggle = (name) => {
     const next = new Set(chosen);
     next.has(name) ? next.delete(name) : next.add(name);
     setChosen(next);
   };
+  const choose = (g, i, name) => {
+    if (g.type !== 'many') return setSel({ ...sel, [g.name]: i });
+    const next = new Set(sel[g.name]);
+    next.has(name) ? next.delete(name) : next.add(name);
+    setSel({ ...sel, [g.name]: next });
+  };
 
   const save = () => {
+    if (missing.length) return;
     if (line) {
       const patch = product ? store.makeLine(product, variant, { qty, extras, note }) : { qty, extras, note: note.trim() };
       store.updateLine(line.key, { ...patch, key: line.key });
@@ -80,7 +92,9 @@ function LineEditor({ product, line, onClose }) {
       </button>`}
       <span class="spacer"></span>
       <${Stepper} value=${qty} onChange=${setQty} />
-      <button class="btn primary big" onClick=${save}>${line ? 'Übernehmen' : 'Hinzufügen'} · ${eur(total)}</button>
+      <button class="btn primary big" disabled=${missing.length > 0} onClick=${save}>
+        ${missing.length ? `Bitte ${missing.join(' und ')} wählen` : `${line ? 'Übernehmen' : 'Hinzufügen'} · ${eur(total)}`}
+      </button>
     `}
   >
     ${product?.desc && html`<p class="muted editor-desc">${product.desc}</p>`}
@@ -94,6 +108,19 @@ function LineEditor({ product, line, onClose }) {
           </button>`,
       )}
     </div>`}
+    ${opts.map(
+      (g) =>
+        html`<h3 class="section-title">${g.type === 'many' ? `${g.name} – Zutaten weglassen` : g.name}${g.required ? html` <span class="req">Pflicht</span>` : ''}</h3>
+          <div class="extras ${g.type === 'many' ? 'without' : 'choice'}">
+            ${g.choices.map(([name, price], i) => {
+              const on = g.type === 'many' ? sel[g.name]?.has(name) : sel[g.name] === i;
+              return html`<button class="extra ${on ? 'on' : ''}" aria-pressed=${on} onClick=${() => choose(g, i, name)}>
+                <span>${g.type === 'many' ? `ohne ${name}` : name}</span>
+                ${price > 0 && html`<span class="extra-price">+${eur(price, { symbol: false })}</span>`}
+              </button>`;
+            })}
+          </div>`,
+    )}
     ${extrasList.length > 0 &&
     html`<h3 class="section-title">Extras</h3>
       <div class="extras">
@@ -105,7 +132,7 @@ function LineEditor({ product, line, onClose }) {
         )}
       </div>`}
     <h3 class="section-title">Notiz für die Küche</h3>
-    <input type="text" class="input" placeholder="z. B. ohne Zwiebeln, gut durch …" value=${note} onInput=${(e) => setNote(e.target.value)} />
+    <input type="text" class="input" placeholder="z. B. gut durch, Sauce extra …" value=${note} onInput=${(e) => setNote(e.target.value)} />
   <//>`;
 }
 
@@ -247,7 +274,7 @@ function Ticket({ onEdit, onCustomer, onCheckout }) {
             </div>
             <button class="line-main" onClick=${() => onEdit(l)}>
               <span class="line-title">${l.nr && html`<span class="nr">${l.nr}</span>`} ${l.name} ${l.variant && html`<span class="line-variant">${l.variant}</span>`}</span>
-              ${l.extras.length > 0 && html`<span class="line-extras">${l.extras.map((e) => `+ ${e.name}`).join(', ')}</span>`}
+              ${l.extras.length > 0 && html`<span class="line-extras">${l.extras.map(extraLabel).join(', ')}</span>`}
               ${l.note && html`<span class="line-note">» ${l.note}</span>`}
             </button>
             <div class="line-price">${eur(lineTotal(l), { symbol: false })}</div>
@@ -347,7 +374,8 @@ export function PosView() {
   }, [menu, activeCat, showExtras, q]);
 
   const pick = (product) => {
-    if (product.v.length > 1) setEditing({ product });
+    // Mehrere Größen oder Auswahlmöglichkeiten (Pommes, Zutaten, Sauce): erst den Dialog zeigen.
+    if (product.v.length > 1 || product.opts?.length) setEditing({ product });
     else store.addLine(store.makeLine(product));
   };
 

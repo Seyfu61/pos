@@ -82,7 +82,7 @@ try {
   // --- Bestellung aufnehmen ---------------------------------------------------------------
   await nav('Kasse');
 
-  // Nummernfeld: 221a -> Pizza Andy (Größenauswahl), 101 -> Cheesehamburger direkt, Korrektur mit ⌫ und C
+  // Nummernfeld: 221a -> Pizza Andy (Größenauswahl), 101 -> Cheesehamburger (Auswahl-Dialog), Korrektur mit ⌫ und C
   const numkey = (ch) => page.locator('.numpad .numkey', { hasText: new RegExp(`^${ch}$`) }).click();
   const display = page.locator('.numpad-display');
   for (const ch of ['2', '2', '1']) await numkey(ch);
@@ -105,6 +105,7 @@ try {
   await page.getByLabel('Eingabe löschen').click();
   for (const ch of ['1', '0', '1']) await numkey(ch);
   await page.locator('.numpad .btn.primary').click();
+  await page.locator('.modal-foot .btn.primary').click(); // Burger: Dialog mit Pommes-Wahl, Vorgabe übernehmen
   await page.locator('.line', { hasText: 'Cheesehamburger' }).waitFor();
   await shot('nummernfeld');
   // wieder entfernen, damit die folgende Bestellung bei null beginnt
@@ -121,14 +122,31 @@ try {
   await page.locator('.variant', { hasText: '40cm' }).first().click();
   await page.locator('.extra', { hasText: 'Käserand' }).click();
   await page.locator('.extra', { hasText: 'Zwiebeln' }).click();
-  await page.getByPlaceholder('z. B. ohne Zwiebeln').fill('gut durchgebacken');
+  await page.getByPlaceholder('z. B. gut durch').fill('gut durchgebacken');
   await shot('artikel-dialog');
   assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /22,40/); // 17,40 + 2,50 + 2,50
   await page.locator('.modal-foot .btn.primary').click();
 
   await page.locator('.cat', { hasText: 'XXL Burger' }).click();
-  await page.locator('.product', { hasText: 'Cheesehamburger' }).click(); // eine Größe -> direkt auf den Bon
+  // Burger: Auswahl Pommes (Vorgabe Twister) und Zutaten weglassen
   await page.locator('.product', { hasText: 'Cheesehamburger' }).click();
+  const pommes = page.locator('.extras.choice .extra');
+  assert.deepEqual(await pommes.allInnerTexts(), ['Twister Pommes', 'Pommes']);
+  assert.equal(await pommes.first().getAttribute('aria-pressed'), 'true', 'Twister Pommes vorausgewählt');
+  assert.deepEqual(await page.locator('.extras.without .extra').allInnerTexts(), ['ohne Sauce', 'ohne Salat', 'ohne Ketchup', 'ohne Tomaten', 'ohne Gurken', 'ohne Zwiebeln', 'ohne Käse']);
+  await pommes.nth(1).click();
+  await page.locator('.extras.without .extra', { hasText: 'ohne Zwiebeln' }).click();
+  await page.locator('.extras.without .extra', { hasText: 'ohne Gurken' }).click();
+  await page.locator('.stepper .btn').last().click();
+  await shot('burger-dialog');
+  assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /25,80/); // 2 × 12,90, "ohne" kostet nichts
+  await page.locator('.modal-foot .btn.primary').click();
+  assert.match(await page.locator('.line', { hasText: 'Cheesehamburger' }).innerText(), /mit Pommes, ohne Gurken, ohne Zwiebeln/);
+  // Bearbeiten zeigt die gewählte Auswahl wieder an
+  await page.locator('.line-main', { hasText: 'Cheesehamburger' }).click();
+  assert.equal(await page.locator('.extras.choice .extra', { hasText: /^Pommes$/ }).getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('.extras.without .extra', { hasText: 'ohne Zwiebeln' }).getAttribute('aria-pressed'), 'true');
+  await page.locator('.modal-foot .btn.primary').click();
   await page.locator('.cat', { hasText: 'Getränke' }).click();
   await page.locator('.product', { hasText: 'Fanta' }).click();
   await page.locator('.variant', { hasText: '1,0 l' }).click();
@@ -232,9 +250,37 @@ try {
   await page.getByRole('button', { name: 'Speichern' }).click();
   await page.locator('.customer-btn.has', { hasText: 'Sabine Krüger' }).waitFor();
 
-  // Artikel direkt, Position bearbeiten (Extras für Burger), freier Artikel
+  // Gyros: Twister Pommes kosten 1,50 € mehr
+  await page.locator('.cat', { hasText: 'Gyros vom Spieß' }).click();
+  await page.locator('.product', { hasText: 'Gyros (2) mit Zaziki' }).click();
+  assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /14,90/);
+  await page.locator('.extras.choice .extra', { hasText: 'Twister Pommes' }).click();
+  assert.match(await page.locator('.extras.choice .extra', { hasText: 'Twister Pommes' }).innerText(), /\+1,50/);
+  assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /16,40/);
+  await page.locator('.modal-foot .btn.primary').click();
+  assert.match(await page.locator('.line', { hasText: 'Gyros' }).innerText(), /mit Twister Pommes[\s\S]*16,40/);
+  // Nuggets: ohne Sauce kein Hinzufügen
+  await page.locator('.cat', { hasText: 'Chicken Nuggets' }).click();
+  await page.locator('.product', { hasText: 'Nuggets mit Twister Pommes' }).click();
+  await page.locator('.variant', { hasText: '20er' }).click();
+  assert.ok(await page.locator('.modal-foot .btn.primary').isDisabled());
+  assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /Bitte Sauce wählen/);
+  await page.locator('.extras.choice .extra', { hasText: 'BBQ-Sauce' }).click();
+  await shot('nuggets-dialog');
+  await page.locator('.modal-foot .btn.primary').click();
+  assert.match(await page.locator('.line', { hasText: 'Nuggets' }).innerText(), /20er[\s\S]*mit BBQ-Sauce[\s\S]*15,90/);
+  // Neuer Artikel "Joghurt groß" unter Beilagen, ohne Dialog direkt auf den Bon
+  await page.locator('.cat', { hasText: 'Beilagen' }).click();
+  await page.locator('.product', { hasText: 'Joghurt groß' }).click();
+  assert.match(await page.locator('.line', { hasText: 'Joghurt groß' }).innerText(), /2,50/);
+  // wieder entfernen
+  for (const name of ['Gyros', 'Nuggets', 'Joghurt']) await page.locator('.line', { hasText: name }).locator('.qty-btn').first().click();
+  assert.equal(await page.locator('.line').count(), 0);
+
+  // Position bearbeiten (Extras für Burger), freier Artikel
   await page.locator('.cat', { hasText: 'XXL Burger' }).click();
   await page.locator('.product', { hasText: 'Baconburger' }).click();
+  await page.locator('.modal-foot .btn.primary').click();
   await page.locator('.line-main', { hasText: 'Baconburger' }).click();
   await page.locator('.extra', { hasText: 'Schmelzkäse' }).click();
   await page.locator('.stepper .btn').last().click();

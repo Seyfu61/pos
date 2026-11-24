@@ -10,7 +10,7 @@
 //   { t:'rule', dashed } / { t:'space', h }
 
 import { eur, fmtDateTime, fmtDayKey } from '../lib/util.js';
-import { ORDER_TYPES, PAYMENTS, STATIONS, lineStation } from '../lib/order.js';
+import { ORDER_TYPES, PAYMENTS, STATIONS, extraLabel, lineStation } from '../lib/order.js';
 
 const text = (t, o = {}) => ({ t: 'text', text: t, ...o });
 const row = (left, right, o = {}) => ({ t: 'row', left, right, ...o });
@@ -81,7 +81,7 @@ export function customerReceipt(order, settings) {
 
   for (const l of order.lines) {
     b.push(row(`${l.qty}x ${lineTitle(l)}`, eur(l.unitPrice * l.qty, { symbol: false }), { bold: true }));
-    for (const e of l.extras ?? []) b.push(row(`+ ${e.name}`, eur(e.price * l.qty, { symbol: false }), { indent: 28 }));
+    for (const e of l.extras ?? []) b.push(row(extraLabel(e), e.price ? eur(e.price * l.qty, { symbol: false }) : '', { indent: 28 }));
     if (l.note) b.push(text(`» ${l.note}`, { indent: 28 }));
   }
   b.push(rule());
@@ -110,7 +110,8 @@ export function customerReceipt(order, settings) {
  */
 export function kitchenTickets(order, categories = []) {
   const groups = Object.fromEntries(Object.keys(STATIONS).map((s) => [s, []]));
-  for (const l of order.lines) groups[lineStation(l, categories)].push(l);
+  // Positionen ohne Station (z. B. Getränke) erscheinen auf keinem Küchenbon.
+  for (const l of order.lines) groups[lineStation(l, categories)]?.push(l);
   const count = (lines) => lines.reduce((n, l) => n + l.qty, 0);
   const tickets = [];
   for (const station of Object.keys(STATIONS)) {
@@ -127,7 +128,7 @@ export function kitchenTickets(order, categories = []) {
     lines.forEach((l, i) => {
       if (i) b.push(rule({ dashed: true }));
       b.push(text(`${l.qty}x ${lineTitle(l)}`, { bold: true, size: 'l' }));
-      for (const e of l.extras ?? []) b.push(text(`+ ${e.name}`, { size: 'l', indent: 28 }));
+      for (const e of l.extras ?? []) b.push(text(extraLabel(e), { size: 'l', indent: 28, bold: e.prefix === 'ohne' }));
       if (l.note) b.push(text(`» ${l.note}`, { size: 'l', bold: true, indent: 28 }));
     });
     b.push(rule());

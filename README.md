@@ -9,13 +9,16 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt und ohne Server – alle Daten lie
   „Hinzufügen“) – die iPad-Tastatur bleibt dabei zu. Größen und Extras wählen,
   Notiz für die Küche, Lieferung oder Abholung, Lieferkosten (1,80 / 2,50 / 3,50 € oder freier Betrag),
   Bar- oder Kartenzahlung.
-- **Speisekarte**: 163 Artikel in 14 Kategorien, importiert von
+- **Auswahl beim Bestellen**: Burger – Twister Pommes (Standard) oder normale Pommes und jede Zutat abwählbar
+  („ohne Zwiebeln“); Gyros – Twister Pommes für 1,50 € Aufpreis; Nuggets und Wings – Sauce (Pflicht).
+  Die Auswahl steht auf Küchen- und Kundenbon. Festgelegt in `tools/fetch-menu.mjs` (`OPTION_RULES`).
+- **Speisekarte**: 163 Artikel in 14 Kategorien (plus eigene), importiert von
   [bringstar.jetzt](https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice) – mit den dortigen
-  Artikelnummern, Größen und Preisen; Tippfehler der Quelle werden beim Import korrigiert
+  Artikelnummern, Größen und Preisen, dazu „Joghurt groß“ (2,50 €); Tippfehler der Quelle werden beim Import korrigiert
   (Liste in `tools/fetch-menu.mjs`). In den Einstellungen bearbeitbar.
 - **Kunden**: Suche nach Telefonnummer, Name oder Straße; Anlegen direkt an der Kasse; **CSV-Import** mit Spaltenzuordnung.
 - **Bons**: Küchenbons getrennt für **Pizzaseite** und **Küchenseite** (groß, ohne Preise; darunter klein, was die
-  jeweils andere Seite für dieselbe Bestellung macht) und Kundenbon (mit Adresse, MwSt.-Ausweis, standardmäßig 2×).
+  jeweils andere Seite für dieselbe Bestellung macht; Getränke stehen auf keinem Küchenbon) und Kundenbon (mit Adresse, MwSt.-Ausweis, standardmäßig 2×).
   Welche Kategorie auf welchem Küchenbon steht, lässt sich je Kategorie einstellen. Nachdruck, Storno, Tagesbericht.
   Bei Lieferungen steht auf dem Kundenbon ein **QR-Code**, der in Google Maps die Route zur Lieferadresse öffnet.
 - **Offline**: als App auf dem Home-Bildschirm installierbar, läuft auch ohne Internet.

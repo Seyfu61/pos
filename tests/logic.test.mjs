@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { compareNr, eur, fold, normPhone, parseEur } from '../js/lib/util.js';
-import { ORDER_TYPES, daySummary, extraPrice, lineTotal, orderTotals, sameLine } from '../js/lib/order.js';
+import { ORDER_TYPES, categoryStation, daySummary, defaultSelection, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, orderTotals, sameLine, selectionEntries } from '../js/lib/order.js';
+import { removableIngredients, sauceChoices } from '../tools/fetch-menu.mjs';
+import { MENU_SCHEMA, migrateMenu, seedMenu } from '../js/lib/store.js';
 import { CATEGORIES, PRODUCTS } from '../js/data/menu.js';
 import { mergeSettings } from '../js/data/defaults.js';
 
@@ -34,7 +36,7 @@ test('Artikelnummern sortieren', () => {
 
 test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   const byNr = (nr) => PRODUCTS.filter((p) => p.nr === nr);
-  assert.equal(PRODUCTS.length, 163);
+  assert.equal(PRODUCTS.length, 164);
   assert.equal(CATEGORIES.length, 14);
   assert.deepEqual(byNr('220')[0].v, [['30cm', 950], ['40cm', 1740], ['40x60cm', 2790]]);
   assert.equal(byNr('220')[0].name, 'Pizza Margherita');
@@ -42,6 +44,9 @@ test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   assert.equal(byNr('100')[0].name, 'Hamburger');
   assert.equal(byNr('108').length, 1, 'doppelter Eintrag der Quelle nur einmal');
   assert.equal(byNr('349')[0].v[0][1], 1790);
+  // eigener Artikel (nicht bei bringstar)
+  const joghurt = PRODUCTS.find((p) => p.id === 'joghurt-gross');
+  assert.deepEqual([joghurt.name, joghurt.v, CATEGORIES.find((c) => c.id === joghurt.cat).name], ['Joghurt groß', [['', 250]], 'Beilagen']);
   // Jede Artikelnummer ist eindeutig, jeder Artikel hat einen Preis und eine bekannte Kategorie.
   const numbered = PRODUCTS.filter((p) => p.nr).map((p) => p.nr);
   assert.equal(new Set(numbered).size, numbered.length);
@@ -58,7 +63,8 @@ test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   assert.equal(cat('Extras Burger').extras, null);
   // Küchenbon-Station: alles rund um Pizza an die Pizzaseite, der Rest an die Küchenseite
   assert.deepEqual(CATEGORIES.filter((c) => c.station === 'pizza').map((c) => c.name), ['Pizza', 'Extras (Pizza)', 'Calzone', 'Pizzabrötchen', 'Pizzabrötchen Extra']);
-  assert.ok(CATEGORIES.every((c) => c.station === 'pizza' || c.station === 'kitchen'));
+  assert.deepEqual(CATEGORIES.filter((c) => c.station === 'none').map((c) => c.name), ['Getränke'], 'Getränke auf keinem Küchenbon');
+  assert.ok(CATEGORIES.every((c) => ['pizza', 'kitchen', 'none'].includes(c.station)));
 });
 
 test('Speisekarte: Tippfehler der Quelle sind korrigiert', () => {
@@ -72,6 +78,109 @@ test('Speisekarte: Tippfehler der Quelle sind korrigiert', () => {
   }
   assert.deepEqual(PRODUCTS.find((p) => p.name === 'Wasser still').v, [['0,5 l', 175]]);
   assert.deepEqual(PRODUCTS.find((p) => p.name === 'Artischocken').v.map((v) => v[0]), ['30cm', '40cm', '40x60cm']);
+});
+
+test('Burger: Pommes-Wahl (Standard Twister) und abwählbare Zutaten', () => {
+  const burgers = PRODUCTS.filter((p) => p.cat === CATEGORIES.find((c) => c.name === 'XXL Burger').id);
+  assert.equal(burgers.length, 17);
+  for (const b of burgers) {
+    const [pommes, ohne] = b.opts;
+    assert.deepEqual(pommes, { name: 'Pommes', type: 'one', prefix: 'mit', default: 0, choices: [['Twister Pommes', 0], ['Pommes', 0]] }, b.name);
+    assert.equal(ohne.type, 'many');
+    assert.equal(ohne.prefix, 'ohne');
+    assert.ok(ohne.choices.length >= 3, b.name);
+    for (const [name] of ohne.choices) assert.ok(!/[(),]|pommes|rindfleisch/i.test(name), `${b.name}: ${name}`);
+  }
+  const ohne = (name) => PRODUCTS.find((p) => p.name === name).opts[1].choices.map((c) => c[0]);
+  assert.deepEqual(ohne('Cheesehamburger'), ['Sauce', 'Salat', 'Ketchup', 'Tomaten', 'Gurken', 'Zwiebeln', 'Käse']);
+  assert.deepEqual(ohne('Holstein-Burger'), ['Spiegeleier', 'Sauce', 'Salat', 'Tomaten', 'Gurken', 'Zwiebeln']);
+  assert.deepEqual(ohne('Gyros-Burger'), ['Zaziki', 'Krautsalat', 'Zwiebeln']);
+  assert.deepEqual(removableIngredients('mit 2x 180g Rindfleisch (100%), hausgemachter Sauce (c,j), roten Zwiebeln und Twister Pommes'), ['Sauce', 'Zwiebeln']);
+  // Extras-Kategorie der Burger bekommt keine Auswahl
+  assert.ok(PRODUCTS.filter((p) => p.cat === CATEGORIES.find((c) => c.name === 'Extras Burger').id).every((p) => !p.opts));
+});
+
+test('Gyros: Twister Pommes für 1,50 € Aufpreis, Nuggets/Wings: Sauce Pflicht', () => {
+  const gyros = PRODUCTS.filter((p) => p.cat === CATEGORIES.find((c) => c.name === 'Gyros vom Spieß').id);
+  assert.equal(gyros.length, 11);
+  for (const g of gyros) assert.deepEqual(g.opts, [{ name: 'Pommes', type: 'one', prefix: 'mit', default: 0, choices: [['Pommes', 0], ['Twister Pommes', 150]] }]);
+  for (const name of ['Nuggets mit Twister Pommes', 'Wings mit Twister Pommes']) {
+    assert.deepEqual(PRODUCTS.find((p) => p.name === name).opts, [
+      { name: 'Sauce', type: 'one', prefix: 'mit', required: true, choices: [['Joghurtsauce', 0], ['BBQ-Sauce', 0], ['Süß-sauer-Sauce', 0], ['Chilisauce', 0]] },
+    ]);
+  }
+  assert.equal(PRODUCTS.find((p) => p.name === 'Chicken Teller').opts, undefined);
+  assert.deepEqual(sauceChoices('Wahlweise mit A / B-Sauce /C'), ['A', 'B-Sauce', 'C']);
+  assert.deepEqual(sauceChoices('ohne Auswahl'), []);
+  // Sonst hat kein Artikel Auswahlgruppen
+  assert.equal(PRODUCTS.filter((p) => p.opts).length, 17 + 11 + 2);
+});
+
+test('Auswahl: Vorgabe, Einträge auf der Position, Bearbeiten, Pflichtfelder', () => {
+  const opts = [
+    { name: 'Pommes', type: 'one', prefix: 'mit', default: 0, choices: [['Pommes', 0], ['Twister Pommes', 150]] },
+    { name: 'Sauce', type: 'one', prefix: 'mit', required: true, choices: [['BBQ', 0], ['Chili', 0]] },
+    { name: 'Ohne', type: 'many', prefix: 'ohne', choices: [['Tomaten', 0], ['Gurken', 0], ['Zwiebeln', 0]] },
+  ];
+  const sel = defaultSelection(opts);
+  assert.equal(sel.Pommes, 0);
+  assert.equal(sel.Sauce, null);
+  assert.deepEqual([...sel.Ohne], []);
+  assert.deepEqual(missingSelection(opts, sel), ['Sauce']);
+  Object.assign(sel, { Pommes: 1, Sauce: 0, Ohne: new Set(['Zwiebeln', 'Tomaten']) });
+  assert.deepEqual(missingSelection(opts, sel), []);
+  const entries = selectionEntries(opts, sel);
+  assert.deepEqual(entries, [
+    { name: 'Twister Pommes', price: 150, group: 'Pommes', prefix: 'mit' },
+    { name: 'BBQ', price: 0, group: 'Sauce', prefix: 'mit' },
+    { name: 'Tomaten', price: 0, group: 'Ohne', prefix: 'ohne' },
+    { name: 'Zwiebeln', price: 0, group: 'Ohne', prefix: 'ohne' },
+  ]);
+  assert.deepEqual(entries.map(extraLabel), ['mit Twister Pommes', 'mit BBQ', 'ohne Tomaten', 'ohne Zwiebeln']);
+  assert.equal(extraLabel({ name: 'Käserand', price: 250 }), '+ Käserand');
+  // Zurück in die Auswahl (Position bearbeiten)
+  const back = entriesToSelection(opts, [...entries, { name: 'Käserand', price: 250 }]);
+  assert.equal(back.Pommes, 1);
+  assert.equal(back.Sauce, 0);
+  assert.deepEqual([...back.Ohne].sort(), ['Tomaten', 'Zwiebeln']);
+  // Preis: Aufpreis zählt, "ohne" kostet nichts
+  assert.equal(lineTotal({ unitPrice: 1390, qty: 2, extras: entries }), 2 * 1540);
+  // "ohne Zwiebeln" und "+ Zwiebeln" sind verschiedene Positionen
+  const l = (extras) => ({ productId: 1, name: 'X', variant: '', unitPrice: 100, qty: 1, tax: 7, note: '', extras });
+  assert.ok(!sameLine(l([{ name: 'Zwiebeln', price: 0, prefix: 'ohne' }]), l([{ name: 'Zwiebeln', price: 0 }])));
+});
+
+test('Küchenbon-Station der Kategorien', () => {
+  assert.equal(categoryStation({ name: 'Getränke' }), 'none');
+  assert.equal(categoryStation({ name: 'Getränke', station: 'kitchen' }), 'kitchen', 'von Hand umgestellt');
+  assert.equal(categoryStation({ name: 'Calzone' }), 'pizza');
+  assert.equal(categoryStation({ name: 'Salat' }), 'kitchen');
+});
+
+test('Von Hand geänderte Speisekarte bekommt die neuen Auswahlmöglichkeiten, eigene Änderungen bleiben', () => {
+  const seed = seedMenu();
+  // Stand vor dieser Version: keine Auswahlgruppen, Getränke an der Küchenseite, ein Preis geändert, ein Artikel gelöscht
+  const old = JSON.parse(JSON.stringify(seed));
+  delete old.schema;
+  old.edited = true;
+  for (const p of old.products) delete p.opts;
+  old.products = old.products.filter((p) => typeof p.id === 'number' && p.name !== 'Hamburger');
+  old.categories.find((c) => c.name === 'Getränke').station = 'kitchen';
+  old.products.find((p) => p.name === 'Cheesehamburger').v[0][1] = 1350;
+  old.products.push({ id: 'peigen', cat: 258, nr: '199', name: 'Haus-Burger', desc: '', v: [['', 1500]], active: true });
+
+  const m = migrateMenu(old, seed);
+  assert.equal(m.schema, MENU_SCHEMA);
+  assert.equal(m.edited, true);
+  const cheese = m.products.find((p) => p.name === 'Cheesehamburger');
+  assert.equal(cheese.v[0][1], 1350, 'eigener Preis bleibt');
+  assert.equal(cheese.opts[0].name, 'Pommes');
+  assert.ok(!m.products.some((p) => p.name === 'Hamburger'), 'gelöschter Artikel kommt nicht zurück');
+  assert.ok(m.products.some((p) => p.name === 'Haus-Burger' && !p.opts), 'eigener Artikel bleibt');
+  assert.equal(m.categories.find((c) => c.name === 'Getränke').station, 'none');
+  for (const p of seed.products.filter((p) => typeof p.id === 'string')) assert.ok(m.products.some((x) => x.id === p.id), `neuer Artikel ${p.name}`);
+  // Aktueller Stand bleibt unverändert
+  assert.equal(migrateMenu(seed, seed), seed);
 });
 
 test('Bestellarten: nur Lieferung und Abholung', () => {
