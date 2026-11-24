@@ -162,7 +162,38 @@ function OrderTab() {
       </div>
     </div>
     <p class="muted small">Den MwSt.-Satz der Artikel legen Sie je Kategorie unter „Speisekarte“ fest (Voreinstellung: Speisen 7 %, Getränke 19 %).</p>
+    <${Zones} />
   </section>`;
+}
+
+function Zones() {
+  const { settings } = useAppState();
+  const zones = settings.order.zones ?? [];
+  const save = (next) => store.saveSettings('order', { zones: next });
+  const update = (i, patch) => save(zones.map((z, j) => (j === i ? { ...z, ...patch } : z)));
+  const parsePlaces = (text) => [...new Set(text.split(/[,;\n]+/).map((p) => p.trim()).filter(Boolean))];
+  return html`<h3 class="section-title">Liefergebiete – Lieferkosten automatisch</h3>
+    <p class="muted small">
+      Beim Auswählen eines Kunden werden die Lieferkosten nach seinem Ort gesetzt. Orte mit Komma oder je Zeile trennen; eine
+      fünfstellige Zahl gilt als PLZ (z. B. 37085). Der Ortsname muss im Feld „Ort“ des Kunden vorkommen – „Rosdorf-Obernjesa“
+      passt also zu „Obernjesa“. Steht ein Ort nirgends, gelten die Lieferkosten der letzten Lieferung an diesen Kunden;
+      sonst werden sie an der Kasse gewählt.
+    </p>
+    ${zones.map(
+      (z, i) =>
+        html`<div class="zone-row" key=${i}>
+          <${MoneyInput} value=${z.fee} onCommit=${(fee) => fee != null && update(i, { fee })} aria-label="Lieferkosten" />
+          <textarea
+            class="input"
+            rows="2"
+            placeholder="Orte eintragen, mit Komma getrennt"
+            value=${(z.places ?? []).join(', ')}
+            onBlur=${(e) => update(i, { places: parsePlaces(e.target.value) })}
+          ></textarea>
+          <button class="btn icon-btn ghost" onClick=${() => save(zones.filter((_, j) => j !== i))} aria-label="Liefergebiet entfernen"><${Icon} name="trash" /></button>
+        </div>`,
+    )}
+    <button class="btn" onClick=${() => save([...zones, { fee: 0, places: [] }])}><${Icon} name="plus" /> Liefergebiet</button>`;
 }
 
 // --- Speisekarte -----------------------------------------------------------------------

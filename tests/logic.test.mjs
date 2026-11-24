@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { compareNr, eur, fold, normPhone, parseEur } from '../js/lib/util.js';
-import { ORDER_TYPES, categoryStation, daySummary, defaultSelection, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, orderTotals, sameLine, selectionEntries } from '../js/lib/order.js';
+import { ORDER_TYPES, autoDeliveryFee, zoneFee, categoryStation, daySummary, defaultSelection, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, orderTotals, sameLine, selectionEntries } from '../js/lib/order.js';
 import { removableIngredients, sauceChoices } from '../tools/fetch-menu.mjs';
 import { MENU_SCHEMA, migrateMenu, seedMenu } from '../js/lib/store.js';
 import { CATEGORIES, PRODUCTS } from '../js/data/menu.js';
@@ -203,6 +203,37 @@ test('Von Hand geänderte Speisekarte bekommt die neuen Auswahlmöglichkeiten, e
   assert.equal(m3.categories.find((c) => c.name === 'Getränke').station, 'kitchen');
 });
 
+test('Liefergebiete: Lieferkosten nach Ort des Kunden', () => {
+  const zones = mergeSettings(undefined).order.zones;
+  assert.deepEqual(zones[0].places, ['Sieboldshausen', 'Niedernjesa', 'Dramfeld', 'Obernjesa', 'Stockhausen', 'Kleinschneen']);
+  const fee = (city, zip = '') => zoneFee({ city, zip }, zones)?.fee ?? null;
+  for (const city of ['Obernjesa', 'Rosdorf-Obernjesa', 'Rosdorf OT Dramfeld', 'Klein Schneen', 'Friedland-Kleinschneen', 'niedernjesa', 'Stockhausen', 'Sieboldshausen']) {
+    assert.equal(fee(city), 180, city);
+  }
+  assert.equal(fee('Rosdorf'), null, 'Ort ohne Liefergebiet');
+  assert.equal(fee('Göttingen'), null);
+  assert.equal(fee(''), null);
+  assert.equal(zoneFee({ city: 'Obernjesa' }, []), null);
+
+  // Genauester Ortsname gewinnt, Ortsname schlägt PLZ
+  const z = [
+    { fee: 250, places: ['Rosdorf', '37085'] },
+    { fee: 180, places: ['Obernjesa'] },
+    { fee: 350, places: ['Göttingen'] },
+  ];
+  assert.deepEqual(zoneFee({ city: 'Rosdorf-Obernjesa', zip: '37124' }, z), { fee: 180, place: 'Obernjesa' });
+  assert.deepEqual(zoneFee({ city: 'Rosdorf', zip: '37124' }, z), { fee: 250, place: 'Rosdorf' });
+  assert.deepEqual(zoneFee({ city: 'Göttingen', zip: '37085' }, z), { fee: 350, place: 'Göttingen' });
+  assert.deepEqual(zoneFee({ city: '', zip: '37085' }, z), { fee: 250, place: '37085' });
+  assert.deepEqual(zoneFee({ city: 'Göttingen-Geismar', zip: '37083' }, z), { fee: 350, place: 'Göttingen' });
+
+  // Rückfall: Lieferkosten der letzten Lieferung an diesen Kunden
+  assert.deepEqual(autoDeliveryFee({ city: 'Obernjesa', lastFee: 350 }, zones), { fee: 180, source: 'zone', place: 'Obernjesa' });
+  assert.deepEqual(autoDeliveryFee({ city: 'Rosdorf', lastFee: 250 }, zones), { fee: 250, source: 'customer' });
+  assert.deepEqual(autoDeliveryFee({ city: 'Rosdorf', lastFee: 0 }, zones), { fee: 0, source: 'customer' });
+  assert.deepEqual(autoDeliveryFee({ city: 'Rosdorf' }, zones), { fee: 0, source: 'none' });
+});
+
 test('Bestellarten: nur Lieferung und Abholung', () => {
   assert.deepEqual(Object.keys(ORDER_TYPES), ['delivery', 'pickup']);
 });
@@ -278,6 +309,8 @@ test('Einstellungen: gespeicherte Werte überschreiben Voreinstellungen, neue Fe
   assert.equal(mergeSettings(undefined).printer.customerCopies, 2);
   assert.equal(mergeSettings({ printer: { driver: 'webprnt' } }).printer.customerCopies, 2, 'auch bei schon gespeicherten Einstellungen');
   // Stände aus der ersten Version werden angeglichen, eigene Werte bleiben
-  assert.deepEqual(mergeSettings({ order: { deliveryFees: [0, 100, 200, 300], defaultType: 'dinein' } }).order, { defaultType: 'delivery', deliveryFees: [180, 250, 350], deliveryTax: 7 });
+  const migrated = mergeSettings({ order: { deliveryFees: [0, 100, 200, 300], defaultType: 'dinein' } }).order;
+  assert.deepEqual([migrated.defaultType, migrated.deliveryFees, migrated.deliveryTax], ['delivery', [180, 250, 350], 7]);
+  assert.deepEqual(migrated.zones.map((z) => z.fee), [180, 250, 350], 'Liefergebiete auch bei schon gespeicherten Einstellungen');
   assert.deepEqual(mergeSettings({ order: { deliveryFees: [150, 400] } }).order.deliveryFees, [150, 400]);
 });

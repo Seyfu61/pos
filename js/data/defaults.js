@@ -30,6 +30,12 @@ export const DEFAULT_SETTINGS = {
   order: {
     defaultType: 'delivery',
     deliveryFees: [180, 250, 350], // Schnellauswahl in Cent
+    // Liefergebiete: Lieferkosten werden beim Auswählen des Kunden anhand seines Ortes gesetzt.
+    zones: [
+      { fee: 180, places: ['Sieboldshausen', 'Niedernjesa', 'Dramfeld', 'Obernjesa', 'Stockhausen', 'Kleinschneen'] },
+      { fee: 250, places: [] },
+      { fee: 350, places: [] },
+    ],
     deliveryTax: 7,
   },
 };

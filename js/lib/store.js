@@ -3,7 +3,7 @@
 import * as db from './db.js';
 import { clone, dayKey, normPhone, uid } from './util.js';
 import { indexCustomer } from './csv.js';
-import { ORDER_TYPES, categoryStation, orderTotals, sameLine } from './order.js';
+import { ORDER_TYPES, autoDeliveryFee, categoryStation, orderTotals, sameLine } from './order.js';
 import { DEFAULT_SETTINGS, mergeSettings } from '../data/defaults.js';
 import { CATEGORIES, MENU_SOURCE, PRODUCTS } from '../data/menu.js';
 
@@ -223,6 +223,40 @@ export function setCart(patch) {
   cartChanged();
 }
 
+/**
+ * Lieferkosten automatisch setzen (Kunde gewählt, Adresse geändert, auf "Lieferung" gewechselt).
+ * feeInfo merkt sich die Herkunft für den Hinweis an der Kasse; von Hand gewählt = 'manual'.
+ */
+export function applyAutoFee() {
+  const cart = state.cart;
+  if (cart.type !== 'delivery' || !cart.customer) return;
+  const r = autoDeliveryFee(cart.customer, state.settings.order.zones);
+  setCart({ deliveryFee: r.fee, feeInfo: { source: r.source, place: r.place ?? '' } });
+}
+
+/** Kunde für die aktuelle Bestellung wählen (oder mit null entfernen). */
+export function pickCustomer(customer) {
+  if (customer) {
+    // Neuer Kunde: Lieferkosten immer neu bestimmen
+    setCart({ customer, feeInfo: null });
+    applyAutoFee();
+    return;
+  }
+  // Kunde entfernt: automatisch gesetzte Lieferkosten gehören zu ihm, von Hand gewählte bleiben stehen.
+  const manual = state.cart.feeInfo?.source === 'manual';
+  setCart({ customer: null, ...(manual ? {} : { deliveryFee: 0, feeInfo: null }) });
+}
+
+/** Lieferkosten von Hand setzen. */
+export function setDeliveryFee(fee) {
+  setCart({ deliveryFee: fee, feeInfo: { source: 'manual' } });
+}
+
+export function setOrderType(type) {
+  setCart({ type });
+  if (type === 'delivery' && !state.cart.feeInfo) applyAutoFee();
+}
+
 export function clearCart() {
   state.cart = newCart();
   cartChanged();
@@ -247,7 +281,12 @@ export async function saveCustomer(customer) {
   const indexed = indexCustomer({ ...c });
   const i = state.customers.findIndex((x) => x.id === c.id);
   state.customers = i >= 0 ? state.customers.map((x, j) => (j === i ? indexed : x)) : [...state.customers, indexed];
-  if (state.cart.customer?.id === c.id) setCart({ customer: publicCustomer(indexed) });
+  if (state.cart.customer?.id === c.id) {
+    const before = state.cart.customer;
+    setCart({ customer: publicCustomer(indexed) });
+    // Neue Adresse -> Lieferkosten neu bestimmen (von Hand gewählte bleiben)
+    if ((before.city !== c.city || before.zip !== c.zip) && state.cart.feeInfo?.source !== 'manual') applyAutoFee();
+  }
   emit();
   return indexed;
 }
@@ -319,6 +358,11 @@ export async function completeOrder({ payment }) {
     payment,
   });
   clearCart();
+  // Lieferkosten beim Kunden merken – für Orte, die in keinem Liefergebiet stehen.
+  if (order.type === 'delivery' && order.customer?.id != null) {
+    const c = state.customers.find((x) => x.id === order.customer.id);
+    if (c && c.lastFee !== order.deliveryFee) saveCustomer({ ...c, lastFee: order.deliveryFee }).catch(console.error);
+  }
   return order;
 }
 

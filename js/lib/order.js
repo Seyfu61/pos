@@ -1,5 +1,7 @@
 // Preis- und Steuerberechnung. Alle Beträge sind Brutto in Cent.
 
+import { fold } from './util.js';
+
 export const ORDER_TYPES = {
   delivery: 'Lieferung',
   pickup: 'Abholung',
@@ -185,4 +187,43 @@ export function daySummary(orders) {
   sum.taxes = [...taxes.values()].sort((a, b) => a.rate - b.rate);
   sum.products = [...products.values()].sort((a, b) => b.qty - a.qty);
   return sum;
+}
+
+// --- Liefergebiete -------------------------------------------------------------------------
+
+const placeKey = (s) => fold(s).replace(/[^a-z0-9]/g, ''); // "Klein Schneen" = "Kleinschneen" = "klein-schneen"
+
+/**
+ * Lieferkosten nach Liefergebiet.
+ * Ein Ortsname passt, wenn er im Ort des Kunden vorkommt ("Rosdorf-Obernjesa", "Friedland OT Kleinschneen");
+ * eine fünfstellige Angabe gilt als PLZ. Passen mehrere, gewinnt der genaueste (längste) Ortsname.
+ * @returns {{ fee:number, place:string } | null}
+ */
+export function zoneFee(customer, zones = []) {
+  const city = placeKey(customer?.city);
+  const zip = String(customer?.zip ?? '').trim();
+  let best = null;
+  for (const z of zones) {
+    for (const place of z.places ?? []) {
+      const p = String(place).trim();
+      if (!p) continue;
+      const isZip = /^\d{5}$/.test(p);
+      const hit = isZip ? p === zip : city && city.includes(placeKey(p));
+      if (!hit) continue;
+      const score = isZip ? 1 : 100 + placeKey(p).length; // Ortsname vor PLZ, genauer vor ungenauer
+      if (!best || score > best.score) best = { fee: z.fee, place: p, score };
+    }
+  }
+  return best && { fee: best.fee, place: best.place };
+}
+
+/**
+ * Lieferkosten für einen Kunden: zuerst nach Liefergebiet, sonst wie bei seiner letzten Lieferung.
+ * @returns {{ fee:number, source:'zone'|'customer'|'none', place?:string }}
+ */
+export function autoDeliveryFee(customer, zones = []) {
+  const z = zoneFee(customer, zones);
+  if (z) return { fee: z.fee, source: 'zone', place: z.place };
+  if (Number.isInteger(customer?.lastFee)) return { fee: customer.lastFee, source: 'customer' };
+  return { fee: 0, source: 'none' };
 }

@@ -7,7 +7,9 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt und ohne Server – alle Daten lie
 
 - **Kasse**: Artikel antippen oder Artikelnummer über das eingebaute **Nummernfeld** eintippen (z. B. `220`,
   „Hinzufügen“) – die iPad-Tastatur bleibt dabei zu. Größen und Extras wählen,
-  Notiz für die Küche, Lieferung oder Abholung, Lieferkosten (1,80 / 2,50 / 3,50 € oder freier Betrag),
+  Notiz für die Küche, Lieferung oder Abholung, Lieferkosten (1,80 / 2,50 / 3,50 € oder freier Betrag –
+  **automatisch nach Ort des Kunden** über die Liefergebiete in Einstellungen › Bestellung, sonst wie bei seiner letzten
+  Lieferung),
   Bar- oder Kartenzahlung.
 - **Auswahl beim Bestellen**: Burger – Twister Pommes (Standard) oder normale Pommes und jede Zutat abwählbar
   („ohne Zwiebeln“); Gyros – Twister Pommes für 1,50 € Aufpreis; Nuggets und Wings – Sauce (Pflicht); Salate – Dressing (Pflicht).

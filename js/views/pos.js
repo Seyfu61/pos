@@ -16,6 +16,16 @@ const TYPE_OPTIONS = [
 const hue = (i) => (i * 47 + 8) % 360;
 const EXTRAS_TAB = 'extras';
 
+/** Hinweis, woher die Lieferkosten stammen. */
+function feeHint(cart) {
+  const info = cart.feeInfo;
+  if (!cart.customer || !info) return '';
+  if (info.source === 'zone') return html`<span class="fee-hint ok">· automatisch (${info.place})</span>`;
+  if (info.source === 'customer') return html`<span class="fee-hint ok">· wie bei der letzten Lieferung</span>`;
+  if (info.source === 'none') return html`<span class="fee-hint warn">· Ort nicht in den Liefergebieten – bitte wählen</span>`;
+  return '';
+}
+
 function priceLabel(p) {
   const prices = p.v.map((v) => v[1]);
   const min = Math.min(...prices);
@@ -238,7 +248,7 @@ function Ticket({ onEdit, onCustomer, onCheckout }) {
 
   return html`<aside class="ticket">
     <div class="ticket-head">
-      <${Segmented} options=${TYPE_OPTIONS} value=${cart.type} onChange=${(type) => store.setCart({ type })} />
+      <${Segmented} options=${TYPE_OPTIONS} value=${cart.type} onChange=${store.setOrderType} />
       <button class="customer-btn ${c ? 'has' : ''}" onClick=${onCustomer}>
         <${Icon} name=${c ? 'user' : 'phone'} />
         ${c
@@ -255,7 +265,7 @@ function Ticket({ onEdit, onCustomer, onCheckout }) {
           aria-label="Kunde entfernen"
           onClick=${(e) => {
             e.stopPropagation();
-            store.setCart({ customer: null });
+            store.pickCustomer(null);
           }}
           ><${Icon} name="x" size=${18}
         /></span>`}
@@ -292,12 +302,12 @@ function Ticket({ onEdit, onCustomer, onCheckout }) {
       />
       ${cart.type === 'delivery' &&
       html`<div class="fee">
-        <span class="fee-label">Lieferkosten</span>
+        <span class="fee-label">Lieferkosten ${feeHint(cart)}</span>
         <div class="chips">
           ${settings.order.deliveryFees.map(
-            (f) => html`<button class="chip ${cart.deliveryFee === f ? 'on' : ''}" onClick=${() => store.setCart({ deliveryFee: cart.deliveryFee === f ? 0 : f })}>${f === 0 ? 'frei' : eur(f, { symbol: false })}</button>`,
+            (f) => html`<button class="chip ${cart.deliveryFee === f ? 'on' : ''}" onClick=${() => store.setDeliveryFee(cart.deliveryFee === f ? 0 : f)}>${f === 0 ? 'frei' : eur(f, { symbol: false })}</button>`,
           )}
-          <${MoneyInput} value=${cart.deliveryFee === 0 || settings.order.deliveryFees.includes(cart.deliveryFee) ? null : cart.deliveryFee} onCommit=${(v) => store.setCart({ deliveryFee: Math.max(0, v ?? 0) })} placeholder="Betrag" aria-label="Lieferkosten frei eingeben" />
+          <${MoneyInput} value=${cart.deliveryFee === 0 || settings.order.deliveryFees.includes(cart.deliveryFee) ? null : cart.deliveryFee} onCommit=${(v) => store.setDeliveryFee(Math.max(0, v ?? 0))} placeholder="Betrag" aria-label="Lieferkosten frei eingeben" />
         </div>
       </div>`}
       <div class="totals">
@@ -308,7 +318,7 @@ function Ticket({ onEdit, onCustomer, onCheckout }) {
       <div class="ticket-actions">
         <button
           class="btn"
-          disabled=${count === 0 && !c && !cart.note}
+          disabled=${count === 0 && !c && !cart.note && !cart.deliveryFee}
           onClick=${() => (count === 0 || confirm('Aktuelle Bestellung wirklich verwerfen?')) && store.clearCart()}
           aria-label="Bestellung verwerfen"
         >
@@ -460,7 +470,7 @@ export function PosView() {
     html`<${CustomerPicker}
       onClose=${() => setDialog(null)}
       onPick=${(customer) => {
-        store.setCart({ customer });
+        store.pickCustomer(customer);
         setDialog(null);
       }}
     />`}

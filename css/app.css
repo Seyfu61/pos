@@ -816,6 +816,26 @@ textarea.input {
   display: grid;
   gap: 5px;
 }
+.fee-hint {
+  font-weight: 500;
+}
+.fee-hint.ok {
+  color: var(--ok);
+}
+.fee-hint.warn {
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+.zone-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.zone-row textarea {
+  min-height: 46px;
+}
 .totals {
   display: grid;
   gap: 2px;

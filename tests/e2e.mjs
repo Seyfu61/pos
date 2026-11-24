@@ -155,6 +155,9 @@ try {
   await page.locator('.customer-btn').click();
   await page.getByPlaceholder('Telefonnummer, Name oder Straße').fill('0550912345');
   await page.locator('.modal .customer-row', { hasText: 'Jürgen Müller' }).click();
+  // Rosdorf steht in keinem Liefergebiet -> Hinweis, keine Lieferkosten gesetzt
+  assert.match(await page.locator('.fee-label').innerText(), /Ort nicht in den Liefergebieten/);
+  assert.equal(await page.locator('.fee .chip.on').count(), 0);
   assert.deepEqual(await page.locator('.segmented').first().locator('button').allInnerTexts().then((t) => t.map((x) => x.trim())), ['Lieferung', 'Abholung']);
   assert.deepEqual(await page.locator('.fee .chip').allInnerTexts(), ['1,80', '2,50', '3,50']);
   await page.getByLabel('Lieferkosten frei eingeben').fill('4');
@@ -182,6 +185,33 @@ try {
   assert.equal(images[2].text, images[3].text, 'die beiden Kundenbons sind identisch');
   assert.notEqual(images[0].text, images[1].text);
   assert.equal(await page.locator('.ticket-lines .line').count(), 0, 'Bon ist nach dem Abschluss leer');
+
+  // --- Lieferkosten automatisch ----------------------------------------------------------------
+  const pickCustomer = async (query, name) => {
+    await page.locator('.customer-btn').click();
+    await page.getByPlaceholder('Telefonnummer, Name oder Straße').fill(query);
+    await page.locator('.modal .customer-row', { hasText: name }).click();
+  };
+  await pickCustomer('Yilmaz', 'Ayse Yilmaz'); // Obernjesa -> 1,80
+  assert.match(await page.locator('.fee-label').innerText(), /automatisch \(Obernjesa\)/);
+  assert.equal(await page.locator('.fee .chip.on').innerText(), '1,80');
+  await shot('lieferkosten-automatisch');
+  await page.locator('.segmented button', { hasText: 'Abholung' }).click();
+  assert.equal(await page.locator('.fee').count(), 0);
+  await page.locator('.segmented button', { hasText: 'Lieferung' }).click();
+  assert.equal(await page.locator('.fee .chip.on').innerText(), '1,80');
+  await pickCustomer('Müller', 'Jürgen Müller'); // Rosdorf: wie bei der letzten Lieferung (2,50)
+  assert.match(await page.locator('.fee-label').innerText(), /wie bei der letzten Lieferung/);
+  assert.equal(await page.locator('.fee .chip.on').innerText(), '2,50');
+  await page.locator('.fee .chip', { hasText: '3,50' }).click(); // von Hand: Hinweis verschwindet
+  assert.doesNotMatch(await page.locator('.fee-label').innerText(), /automatisch|letzten/);
+  await page.locator('.customer-clear').click();
+  assert.match(await page.locator('.total-row.grand').innerText(), /3,50/, 'von Hand gewählte Lieferkosten bleiben');
+  await page.locator('.ticket-actions .btn').first().click(); // verwerfen
+  assert.match(await page.locator('.total-row.grand').innerText(), /0,00/);
+  await pickCustomer('Yilmaz', 'Ayse Yilmaz');
+  await page.locator('.customer-clear').click();
+  assert.match(await page.locator('.total-row.grand').innerText(), /0,00/, 'automatische Lieferkosten gehen mit dem Kunden');
 
   // --- Bestellübersicht, Nachdruck, Storno ------------------------------------------------------
   await nav('Bestellungen');
