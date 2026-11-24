@@ -10,7 +10,7 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt und ohne Server – alle Daten lie
   Notiz für die Küche, Lieferung oder Abholung, Lieferkosten (1,80 / 2,50 / 3,50 € oder freier Betrag),
   Bar- oder Kartenzahlung.
 - **Auswahl beim Bestellen**: Burger – Twister Pommes (Standard) oder normale Pommes und jede Zutat abwählbar
-  („ohne Zwiebeln“); Gyros – Twister Pommes für 1,50 € Aufpreis; Nuggets und Wings – Sauce (Pflicht).
+  („ohne Zwiebeln“); Gyros – Twister Pommes für 1,50 € Aufpreis; Nuggets und Wings – Sauce (Pflicht); Salate – Dressing (Pflicht).
   Die Auswahl steht auf Küchen- und Kundenbon. Festgelegt in `tools/fetch-menu.mjs` (`OPTION_RULES`).
 - **Speisekarte**: 163 Artikel in 14 Kategorien (plus eigene), importiert von
   [bringstar.jetzt](https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice) – mit den dortigen

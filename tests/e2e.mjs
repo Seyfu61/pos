@@ -269,12 +269,20 @@ try {
   await shot('nuggets-dialog');
   await page.locator('.modal-foot .btn.primary').click();
   assert.match(await page.locator('.line', { hasText: 'Nuggets' }).innerText(), /20er[\s\S]*mit BBQ-Sauce[\s\S]*15,90/);
+  // Salat: Größe und Dressing (Pflicht)
+  await page.locator('.cat', { hasText: 'Salat' }).click();
+  await page.locator('.product', { hasText: 'Bauernsalat' }).click();
+  await page.locator('.variant', { hasText: 'groß' }).click();
+  assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /Bitte Dressing wählen/);
+  await page.locator('.extras.choice .extra', { hasText: 'Essig+Öl' }).click();
+  await page.locator('.modal-foot .btn.primary').click();
+  assert.match(await page.locator('.line', { hasText: 'Bauernsalat' }).innerText(), /groß[\s\S]*Dressing: Essig\+Öl[\s\S]*9,60/);
   // Neuer Artikel "Joghurt groß" unter Beilagen, ohne Dialog direkt auf den Bon
   await page.locator('.cat', { hasText: 'Beilagen' }).click();
   await page.locator('.product', { hasText: 'Joghurt groß' }).click();
   assert.match(await page.locator('.line', { hasText: 'Joghurt groß' }).innerText(), /2,50/);
   // wieder entfernen
-  for (const name of ['Gyros', 'Nuggets', 'Joghurt']) await page.locator('.line', { hasText: name }).locator('.qty-btn').first().click();
+  for (const name of ['Gyros', 'Nuggets', 'Bauernsalat', 'Joghurt']) await page.locator('.line', { hasText: name }).locator('.qty-btn').first().click();
   assert.equal(await page.locator('.line').count(), 0);
 
   // Position bearbeiten (Extras für Burger), freier Artikel

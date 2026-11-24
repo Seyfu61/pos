@@ -52,7 +52,8 @@ export function setView(view) {
 
 // --- Start ---------------------------------------------------------------------
 
-export const MENU_SCHEMA = 2;
+// 2: Auswahl bei Burgern/Gyros/Nuggets, Joghurt groß, Getränke ohne Küchenbon · 3: Dressing-Auswahl bei Salaten
+export const MENU_SCHEMA = 3;
 
 export function seedMenu() {
   return { schema: MENU_SCHEMA, source: MENU_SOURCE, categories: clone(CATEGORIES), products: clone(PRODUCTS).map((p) => ({ ...p, active: true })) };
@@ -63,14 +64,19 @@ export function seedMenu() {
  * Auswahlmöglichkeiten (Pommes, Zutaten, Sauce) ergänzen, neue eigene Artikel aufnehmen, Getränke vom Küchenbon nehmen.
  */
 export function migrateMenu(menu, seed = seedMenu()) {
-  if ((menu.schema ?? 1) >= MENU_SCHEMA) return menu;
+  const from = menu.schema ?? 1;
+  if (from >= MENU_SCHEMA) return menu;
   const seedById = new Map(seed.products.map((p) => [p.id, p]));
+  // Auswahlgruppen nur bei Artikeln ergänzen, die noch keine haben – nichts Vorhandenes wird überschrieben.
   const products = menu.products.map((p) => (p.opts || !seedById.get(p.id)?.opts ? p : { ...p, opts: clone(seedById.get(p.id).opts) }));
-  const known = new Set(menu.products.map((p) => p.id));
-  const cats = new Set(menu.categories.map((c) => c.id));
-  // Eigene Artikel der Kasse haben Text-IDs (bringstar: Zahlen) – die neuen kommen dazu, sofern ihre Kategorie noch existiert.
-  for (const p of seed.products) if (typeof p.id === 'string' && !known.has(p.id) && cats.has(p.cat)) products.push(clone(p));
-  const categories = menu.categories.map((c) => (/getränk/i.test(c.name) && (c.station ?? 'kitchen') === 'kitchen' ? { ...c, station: 'none' } : c));
+  let categories = menu.categories;
+  if (from < 2) {
+    const known = new Set(menu.products.map((p) => p.id));
+    const cats = new Set(menu.categories.map((c) => c.id));
+    // Eigene Artikel der Kasse haben Text-IDs (bringstar: Zahlen) – sie kommen dazu, sofern ihre Kategorie noch existiert.
+    for (const p of seed.products) if (typeof p.id === 'string' && !known.has(p.id) && cats.has(p.cat)) products.push(clone(p));
+    categories = categories.map((c) => (/getränk/i.test(c.name) && (c.station ?? 'kitchen') === 'kitchen' ? { ...c, station: 'none' } : c));
+  }
   return { ...menu, schema: MENU_SCHEMA, categories, products };
 }
 

@@ -113,7 +113,15 @@ test('Gyros: Twister Pommes für 1,50 € Aufpreis, Nuggets/Wings: Sauce Pflicht
   assert.deepEqual(sauceChoices('Wahlweise mit A / B-Sauce /C'), ['A', 'B-Sauce', 'C']);
   assert.deepEqual(sauceChoices('ohne Auswahl'), []);
   // Sonst hat kein Artikel Auswahlgruppen
-  assert.equal(PRODUCTS.filter((p) => p.opts).length, 17 + 11 + 2);
+  // Salate: Dressing Pflicht (Krautsalat hat keine Wahl)
+  const salads = PRODUCTS.filter((p) => p.cat === CATEGORIES.find((c) => c.name === 'Salat').id);
+  for (const s of salads.filter((p) => p.name !== 'Krautsalat')) {
+    assert.deepEqual(s.opts, [{ name: 'Dressing', type: 'one', prefix: 'Dressing:', required: true, choices: [['Joghurtdressing', 0], ['Essig+Öl', 0], ['scharfes Dressing', 0]] }], s.name);
+  }
+  assert.equal(PRODUCTS.find((p) => p.name === 'Krautsalat').opts, undefined);
+  assert.equal(extraLabel({ name: 'Essig+Öl', price: 0, prefix: 'Dressing:' }), 'Dressing: Essig+Öl');
+  // Sonst hat kein Artikel Auswahlgruppen
+  assert.equal(PRODUCTS.filter((p) => p.opts).length, 17 + 11 + 2 + 10);
 });
 
 test('Auswahl: Vorgabe, Einträge auf der Position, Bearbeiten, Pflichtfelder', () => {
@@ -181,6 +189,18 @@ test('Von Hand geänderte Speisekarte bekommt die neuen Auswahlmöglichkeiten, e
   for (const p of seed.products.filter((p) => typeof p.id === 'string')) assert.ok(m.products.some((x) => x.id === p.id), `neuer Artikel ${p.name}`);
   // Aktueller Stand bleibt unverändert
   assert.equal(migrateMenu(seed, seed), seed);
+
+  // Stand nach der vorigen Version (2): Salate bekommen das Dressing, eigene Entscheidungen von damals bleiben
+  const v2 = JSON.parse(JSON.stringify(seed));
+  v2.schema = 2;
+  v2.edited = true;
+  for (const p of v2.products) if (/^Salat$/.test(v2.categories.find((c) => c.id === p.cat).name)) delete p.opts;
+  v2.products = v2.products.filter((p) => p.id !== 'joghurt-gross'); // bewusst gelöscht
+  v2.categories.find((c) => c.name === 'Getränke').station = 'kitchen'; // bewusst zurückgestellt
+  const m3 = migrateMenu(v2, seed);
+  assert.equal(m3.products.find((p) => p.name === 'Bauernsalat').opts[0].name, 'Dressing');
+  assert.ok(!m3.products.some((p) => p.id === 'joghurt-gross'), 'gelöschter eigener Artikel kommt nicht zurück');
+  assert.equal(m3.categories.find((c) => c.name === 'Getränke').station, 'kitchen');
 });
 
 test('Bestellarten: nur Lieferung und Abholung', () => {

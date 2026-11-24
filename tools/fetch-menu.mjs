@@ -70,6 +70,10 @@ const OPTION_RULES = [
     cat: /nuggets|wings/i,
     build: (item) => [{ name: 'Sauce', type: 'one', prefix: 'mit', required: true, choices: sauceChoices(item.desc).map((s) => [s, 0]) }],
   },
+  {
+    cat: /^salat$/i,
+    build: (item) => [{ name: 'Dressing', type: 'one', prefix: 'Dressing:', required: true, choices: sauceChoices(item.desc).map((s) => [s, 0]) }],
+  },
 ];
 
 function buildOptions(cat, item) {
