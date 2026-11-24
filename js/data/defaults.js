@@ -37,6 +37,9 @@ export const DEFAULT_SETTINGS = {
       { fee: 350, places: [] },
     ],
     deliveryTax: 7,
+    // Zielzeit bis die Bestellung raus ist (Minuten ab Eingang), "bald fällig" ab so vielen Minuten vorher
+    prepMinutes: { delivery: 45, pickup: 20 },
+    soonMinutes: 10,
   },
 };
 

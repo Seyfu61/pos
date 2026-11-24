@@ -3,7 +3,7 @@
 import { html, useEffect, useMemo, useState, CanvasView, Icon, Modal, useAppState } from '../lib/ui.js';
 import * as store from '../lib/store.js';
 import { dayKey, eur, fmtDayKey, fmtTime } from '../lib/util.js';
-import { ORDER_TYPES, PAYMENTS, daySummary } from '../lib/order.js';
+import { ORDER_TYPES, PAYMENTS, STAGES, daySummary, isOpenOrder } from '../lib/order.js';
 import { customerReceipt, dayReport, kitchenTickets } from '../print/receipt.js';
 import { printReceipts, renderReceipt } from '../print/index.js';
 
@@ -40,7 +40,7 @@ function shiftDay(key, delta) {
   return dayKey(d);
 }
 
-function OrderDetail({ order, onClose, onChanged, setPreview }) {
+export function OrderDetail({ order, onClose, onChanged, setPreview }) {
   const { settings, menu } = useAppState();
   const canvas = useMemo(() => renderReceipt(customerReceipt(order, settings), settings), [order, settings]);
   const cancelled = order.status === 'cancelled';
@@ -122,7 +122,7 @@ export function OrdersView() {
                 <strong>${o.customer?.name || '–'}</strong>
                 <span>${o.type === 'delivery' ? [o.customer?.street, o.customer?.city].filter(Boolean).join(', ') : `${o.lines.reduce((s, l) => s + l.qty, 0)} Artikel`}</span>
               </span>
-              <span class="order-pay">${o.status === 'cancelled' ? 'storniert' : PAYMENTS[o.payment]}</span>
+              <span class="order-pay">${o.status === 'cancelled' ? 'storniert' : isOpenOrder(o) ? html`<span class="stage-tag">${STAGES[o.stage]}</span>` : PAYMENTS[o.payment]}</span>
               <span class="order-total">${eur(o.total)}</span>
             </button>`,
         )}

@@ -264,6 +264,8 @@ try {
     window.__printCalls = 0;
     window.print = () => window.__printCalls++;
   });
+  // Uhrzeit festhalten, damit Fälligkeiten prüfbar sind (Timer laufen normal weiter)
+  await page.clock.setFixedTime(new Date(2026, 10, 24, 18, 0));
   await page.goto(APP);
   await page.locator('.product').first().waitFor();
 
@@ -339,12 +341,21 @@ try {
   assert.equal(await page.locator('.line').count(), 1);
   await shot('kasse-gross');
 
-  // Abschluss ohne Drucker
+  // Abschluss ohne Drucker, als Vorbestellung zur Abholung um 19:30
   await page.locator('.segmented button', { hasText: 'Abholung' }).click();
+  await page.getByLabel('Vorbestellung: Uhrzeit').fill('19:30');
   await page.getByRole('button', { name: /Abschließen ·/ }).click();
+  assert.match(await page.locator('.due-info').innerText(), /Abholung um 19:30 Uhr/);
   await page.locator('.segmented button', { hasText: 'Karte' }).click();
   await page.getByRole('button', { name: 'Abschließen', exact: true }).click();
   await toast('kein Drucker eingerichtet');
+  assert.equal(await page.locator('.chip', { hasText: 'Sofort' }).getAttribute('class').then((c) => c.includes('on')), true, 'neue Bestellung wieder "Sofort"');
+  assert.equal(await page.locator('.rail-badge').innerText(), '1');
+  await nav('Offen');
+  const card1 = page.locator('.open-card', { hasText: '#1' });
+  assert.match(await card1.innerText(), /Vorbestellt 19:30 · noch 1 Std\. 30 Min\./);
+  assert.match(await card1.getAttribute('class'), /lvl-pre/);
+  await nav('Kasse');
 
   // Küchenbons als Vorschau: nur Burger bestellt -> nur ein Bon (Küchenseite)
   await nav('Bestellungen');
@@ -376,9 +387,42 @@ try {
   await page.getByPlaceholder('192.168.178.50').fill('localhost:9');
   await page.getByPlaceholder('192.168.178.50').blur();
   await nav('Kasse');
+  await page.locator('.segmented button', { hasText: 'Lieferung' }).click();
   await page.getByRole('button', { name: /Abschließen ·/ }).click();
   await page.getByRole('button', { name: 'Abschließen & drucken' }).click();
   await toast('ist gespeichert, aber: Drucker nicht erreichbar');
+
+  // --- Offene Bestellungen: 50 Minuten später -------------------------------------------------
+  await page.clock.setFixedTime(new Date(2026, 10, 24, 18, 50));
+  await nav('Offen');
+  const cards = page.locator('.open-list').first().locator('.open-card');
+  assert.equal(await cards.count(), 2);
+  assert.match(await cards.first().innerText(), /#2[\s\S]*Lieferung[\s\S]*Sabine Krüger[\s\S]*fällig 18:45 · 5 Min\. überfällig[\s\S]*seit 50 Min\./, 'dringendste zuerst');
+  assert.match(await cards.first().getAttribute('class'), /lvl-late/);
+  assert.match(await cards.nth(1).innerText(), /#1[\s\S]*Vorbestellt 19:30 · noch 40 Min\./);
+  assert.match(await page.locator('.late-badge').innerText(), /1 überfällig/);
+  assert.match(await page.locator('.rail-badge').getAttribute('class'), /late/);
+  assert.equal(await page.locator('.rail-badge').innerText(), '2');
+  await shot('offen');
+  await cards.first().getByRole('button', { name: /Unterwegs/ }).click();
+  const moving = page.locator('.open-list').nth(1).locator('.open-card');
+  await moving.first().waitFor();
+  assert.match(await moving.first().innerText(), /#2[\s\S]*Unterwegs seit 0 Min\./);
+  assert.equal(await page.locator('.rail-badge').innerText(), '1');
+  assert.doesNotMatch(await page.locator('.rail-badge').getAttribute('class'), /late/);
+  await moving.first().getByRole('button', { name: /Geliefert/ }).click();
+  await page.locator('.open-list').nth(1).locator('.open-card').waitFor({ state: 'detached' });
+  // Abholung: Abholbereit -> Abgeholt; "Zurück" setzt in die Küche zurück
+  await cards.first().getByRole('button', { name: /Abholbereit/ }).click();
+  await moving.first().getByRole('button', { name: 'Zurück in die Küche' }).click();
+  await cards.first().getByRole('button', { name: /Abholbereit/ }).waitFor();
+  // Antippen öffnet die Bestellung (Nachdruck, Storno)
+  await cards.first().click();
+  await page.locator('.modal .receipt-preview canvas').waitFor();
+  await page.locator('.modal-head .btn').click();
+  await nav('Bestellungen');
+  assert.match(await page.locator('.order-row', { hasText: '#1' }).innerText(), /In der Küche/);
+  assert.doesNotMatch(await page.locator('.order-row', { hasText: '#2' }).innerText(), /In der Küche|Unterwegs/);
   await nav('Bestellungen');
   await page.locator('.order-row').nth(1).waitFor();
 

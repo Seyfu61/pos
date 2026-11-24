@@ -1,18 +1,32 @@
 // Einstiegspunkt: App-Rahmen mit Navigation und Meldungen.
 
-import { html, render, Icon, useAppState } from './lib/ui.js';
+import { html, render, Icon, useAppState, useNow } from './lib/ui.js';
+import { orderDue } from './lib/order.js';
 import * as store from './lib/store.js';
 import { PosView } from './views/pos.js';
 import { OrdersView } from './views/orders.js';
+import { OpenView } from './views/open.js';
 import { CustomersView } from './views/customers.js';
 import { SettingsView } from './views/settings.js';
 
 const NAV = [
   { view: 'pos', label: 'Kasse', icon: 'grid', component: PosView },
+  { view: 'open', label: 'Offen', icon: 'clock', component: OpenView },
   { view: 'orders', label: 'Bestellungen', icon: 'receipt', component: OrdersView },
   { view: 'customers', label: 'Kunden', icon: 'users', component: CustomersView },
   { view: 'settings', label: 'Einstellungen', icon: 'sliders', component: SettingsView },
 ];
+
+/** Zahl am Menüpunkt "Offen": Bestellungen in der Küche, rot sobald eine überfällig ist. */
+function OpenBadge() {
+  const { openOrders, settings } = useAppState();
+  useNow(20000); // regelmäßig neu zeichnen
+  const now = new Date();
+  const kitchen = openOrders.filter((o) => o.stage === 'kitchen');
+  if (!kitchen.length) return null;
+  const late = kitchen.some((o) => orderDue(o, settings.order, now).level === 'late');
+  return html`<span class="rail-badge ${late ? 'late' : ''}" aria-label=${`${kitchen.length} in der Küche${late ? ', überfällig' : ''}`}>${kitchen.length}</span>`;
+}
 
 function App() {
   const s = useAppState();
@@ -31,7 +45,7 @@ function App() {
       ${NAV.map(
         (n) =>
           html`<button class="rail-btn ${n === current ? 'on' : ''}" onClick=${() => store.setView(n.view)} aria-current=${n === current ? 'page' : undefined}>
-            <${Icon} name=${n.icon} size=${26} /><span>${n.label}</span>
+            <${Icon} name=${n.icon} size=${26} /><span>${n.label}</span>${n.view === 'open' && html`<${OpenBadge} />`}
           </button>`,
       )}
     </nav>

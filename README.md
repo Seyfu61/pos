@@ -14,6 +14,11 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt und ohne Server – alle Daten lie
 - **Auswahl beim Bestellen**: Burger – Twister Pommes (Standard) oder normale Pommes und jede Zutat abwählbar
   („ohne Zwiebeln“); Gyros – Twister Pommes für 1,50 € Aufpreis; Nuggets und Wings – Sauce (Pflicht); Salate – Dressing (Pflicht).
   Die Auswahl steht auf Küchen- und Kundenbon. Festgelegt in `tools/fetch-menu.mjs` (`OPTION_RULES`).
+- **Offen**: alle laufenden Bestellungen mit Eingangszeit, Fälligkeit und Farbe nach Dringlichkeit (grün / orange =
+  bald fällig / rot = überfällig), dringendste oben; Ablauf Küche → Unterwegs bzw. Abholbereit → Geliefert bzw. Abgeholt.
+  Zielzeiten (Standard: Lieferung 45 Min., Abholung 20 Min.) in Einstellungen › Bestellung. Die Zahl am Menüpunkt zeigt
+  die Bestellungen in der Küche und wird rot, sobald eine überfällig ist.
+- **Vorbestellung**: an der Kasse statt „Sofort“ eine Uhrzeit wählen; steht groß auf Küchen- und Kundenbon.
 - **Speisekarte**: 163 Artikel in 14 Kategorien (plus eigene), importiert von
   [bringstar.jetzt](https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice) – mit den dortigen
   Artikelnummern, Größen und Preisen, dazu „Joghurt groß“ (2,50 €); Tippfehler der Quelle werden beim Import korrigiert

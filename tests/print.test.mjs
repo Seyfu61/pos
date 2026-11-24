@@ -190,6 +190,16 @@ test('Küchenbons: Pizzaseite und Küchenseite getrennt, mit Hinweis auf die and
   assert.deepEqual(rows.find((b) => b.left === 'ohne Zwiebeln')?.right, '');
 });
 
+test('Vorbestellung: Uhrzeit groß auf Küchenbons und auf dem Kundenbon', () => {
+  const pre = { ...order, dueAt: '2026-11-24T19:30:00' };
+  for (const t of kitchenTickets(pre)) assert.ok(texts(t).includes('VORBESTELLT: 19:30 UHR'));
+  assert.ok(texts(customerReceipt(pre, mergeSettings())).includes('Lieferung um 19:30 Uhr'));
+  assert.ok(texts(customerReceipt({ ...pre, type: 'pickup' }, mergeSettings())).includes('Abholung um 19:30 Uhr'));
+  // ohne Vorbestellung keine Zeile
+  assert.ok(!texts(kitchenTickets(order)[0]).some((x) => /VORBESTELLT/.test(x)));
+  assert.ok(!texts(customerReceipt(order, mergeSettings())).some((x) => / um \d/.test(x)));
+});
+
 test('Küchenbons: nur Getränke -> kein Küchenbon', () => {
   assert.deepEqual(kitchenTickets({ ...order, lines: order.lines.filter((l) => l.station === 'none') }), []);
 });

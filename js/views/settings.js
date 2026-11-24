@@ -157,6 +157,18 @@ function OrderTab() {
       <${Field} label="Lieferkosten – Schnellauswahl (€)" hint="Mehrere Beträge mit Semikolon trennen, z. B. 1,80; 2,50; 3,50. Andere Beträge lassen sich an der Kasse frei eingeben." wide>
         <${TextInput} class="input" value=${feesText} onCommit=${setFees} />
       <//>
+      <label class="field"><span class="field-label">Zielzeit Lieferung (Minuten bis raus)</span>
+        <input type="number" inputmode="numeric" min="5" max="240" class="input" value=${o.prepMinutes.delivery}
+          onChange=${(e) => +e.target.value > 0 && set({ prepMinutes: { ...o.prepMinutes, delivery: Math.round(+e.target.value) } })} />
+      </label>
+      <label class="field"><span class="field-label">Zielzeit Abholung (Minuten bis fertig)</span>
+        <input type="number" inputmode="numeric" min="5" max="240" class="input" value=${o.prepMinutes.pickup}
+          onChange=${(e) => +e.target.value > 0 && set({ prepMinutes: { ...o.prepMinutes, pickup: Math.round(+e.target.value) } })} />
+      </label>
+      <label class="field"><span class="field-label">„Bald fällig“ (orange) ab Minuten vorher</span>
+        <input type="number" inputmode="numeric" min="0" max="60" class="input" value=${o.soonMinutes}
+          onChange=${(e) => e.target.value !== '' && +e.target.value >= 0 && set({ soonMinutes: Math.round(+e.target.value) })} />
+      </label>
       <div class="field"><span class="field-label">MwSt. auf Lieferkosten</span>
         <${Segmented} options=${[{ value: 7, label: '7 %' }, { value: 19, label: '19 %' }]} value=${o.deliveryTax} onChange=${(deliveryTax) => set({ deliveryTax })} />
       </div>

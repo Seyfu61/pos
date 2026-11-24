@@ -9,7 +9,7 @@
 //   { t:'qr',   data, caption }                QR-Code, zentriert
 //   { t:'rule', dashed } / { t:'space', h }
 
-import { eur, fmtDateTime, fmtDayKey } from '../lib/util.js';
+import { eur, fmtDateTime, fmtDayKey, fmtTime } from '../lib/util.js';
 import { ORDER_TYPES, PAYMENTS, STATIONS, extraLabel, lineStation } from '../lib/order.js';
 
 const text = (t, o = {}) => ({ t: 'text', text: t, ...o });
@@ -73,6 +73,7 @@ export function customerReceipt(order, settings) {
   if (order.status === 'cancelled') b.push(box('STORNIERT', { size: 'l' }), space(4));
   b.push(row(`Bon-Nr. ${order.bonNr}`, fmtDateTime(order.createdAt), { size: 's' }));
   b.push(space(4), box(`${typeLabel(order)}  #${order.dayNr}`, { size: 'l' }), space(6));
+  if (order.dueAt) b.push(text(`${order.type === 'pickup' ? 'Abholung' : 'Lieferung'} um ${fmtTime(order.dueAt)} Uhr`, { bold: true, size: 'l' }));
   if (customerBlock(b, order, { large: order.type === 'delivery' })) b.push(space(2));
   const maps = order.type === 'delivery' && settings.printer?.mapsQr !== false ? mapsUrl(order.customer) : '';
   if (maps) b.push({ t: 'qr', data: maps, caption: 'Route in Google Maps: QR-Code scannen' });
@@ -121,6 +122,7 @@ export function kitchenTickets(order, categories = []) {
     b.push(box(`${STATIONS[station].toUpperCase()}  #${order.dayNr}`, { size: 'xl' }));
     b.push(space(4), text(typeLabel(order), { align: 'center', size: 'l', bold: true }));
     b.push(row(fmtDateTime(order.createdAt), `Bon-Nr. ${order.bonNr}`, { size: 's' }));
+    if (order.dueAt) b.push(space(4), box(`VORBESTELLT: ${fmtTime(order.dueAt)} UHR`, { size: 'l' }), space(4));
     const c = order.customer;
     if (c?.name) b.push(text([c.name, order.type === 'delivery' ? c.city : ''].filter(Boolean).join(' · '), { bold: true }));
     if (order.note) b.push(text(`» ${order.note}`, { bold: true, size: 'l' }));

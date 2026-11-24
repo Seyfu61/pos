@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { compareNr, eur, fold, normPhone, parseEur } from '../js/lib/util.js';
-import { ORDER_TYPES, autoDeliveryFee, zoneFee, categoryStation, daySummary, defaultSelection, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, orderTotals, sameLine, selectionEntries } from '../js/lib/order.js';
+import { ORDER_TYPES, fmtMinutes, isOpenOrder, nextStage, orderDue, timeToday, autoDeliveryFee, zoneFee, categoryStation, daySummary, defaultSelection, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, orderTotals, sameLine, selectionEntries } from '../js/lib/order.js';
 import { removableIngredients, sauceChoices } from '../tools/fetch-menu.mjs';
 import { MENU_SCHEMA, migrateMenu, seedMenu } from '../js/lib/store.js';
 import { CATEGORIES, PRODUCTS } from '../js/data/menu.js';
@@ -232,6 +232,49 @@ test('Liefergebiete: Lieferkosten nach Ort des Kunden', () => {
   assert.deepEqual(autoDeliveryFee({ city: 'Rosdorf', lastFee: 250 }, zones), { fee: 250, source: 'customer' });
   assert.deepEqual(autoDeliveryFee({ city: 'Rosdorf', lastFee: 0 }, zones), { fee: 0, source: 'customer' });
   assert.deepEqual(autoDeliveryFee({ city: 'Rosdorf' }, zones), { fee: 0, source: 'none' });
+});
+
+test('Offene Bestellungen: Fälligkeit und Dringlichkeit', () => {
+  const settings = mergeSettings(undefined).order;
+  assert.deepEqual([settings.prepMinutes, settings.soonMinutes], [{ delivery: 45, pickup: 20 }, 10]);
+  const at = (hhmm) => new Date(`2026-11-24T${hhmm}:00`);
+  const o = (o) => ({ type: 'delivery', createdAt: at('18:00').toISOString(), dueAt: null, ...o });
+
+  let d = orderDue(o(), settings, at('18:10'));
+  assert.deepEqual([d.due.getTime(), d.left, d.elapsed, d.level, d.preorder], [at('18:45').getTime(), 35, 10, 'ok', false]);
+  assert.equal(orderDue(o(), settings, at('18:35')).level, 'soon'); // noch 10 Min.
+  assert.equal(orderDue(o(), settings, at('18:34')).level, 'ok'); // noch 11 Min.
+  d = orderDue(o(), settings, at('18:52'));
+  assert.deepEqual([d.left, d.level], [-7, 'late']);
+  // Abholung: 20 Minuten
+  assert.equal(orderDue(o({ type: 'pickup' }), settings, at('18:21')).level, 'late');
+  // Vorbestellung: gewünschte Uhrzeit zählt; mehr als eine Stunde vorher grau ("pre")
+  d = orderDue(o({ dueAt: at('20:00').toISOString() }), settings, at('18:10'));
+  assert.deepEqual([d.due.getTime(), d.level, d.preorder], [at('20:00').getTime(), 'pre', true]);
+  assert.equal(orderDue(o({ dueAt: at('20:00').toISOString() }), settings, at('19:30')).level, 'ok');
+  assert.equal(orderDue(o({ dueAt: at('20:00').toISOString() }), settings, at('19:55')).level, 'soon');
+  // Eigene Zielzeiten
+  assert.equal(orderDue(o(), { prepMinutes: { delivery: 30 }, soonMinutes: 5 }, at('18:26')).level, 'soon');
+  assert.equal(orderDue(o(), { prepMinutes: { delivery: 30 }, soonMinutes: 5 }, at('18:24')).level, 'ok');
+});
+
+test('Offene Bestellungen: Ablauf, Uhrzeit, Anzeige', () => {
+  assert.deepEqual(nextStage({ stage: 'kitchen', type: 'delivery' }), { stage: 'out', label: 'Unterwegs' });
+  assert.deepEqual(nextStage({ stage: 'kitchen', type: 'pickup' }), { stage: 'ready', label: 'Abholbereit' });
+  assert.deepEqual(nextStage({ stage: 'out' }), { stage: 'done', label: 'Geliefert' });
+  assert.deepEqual(nextStage({ stage: 'ready' }), { stage: 'done', label: 'Abgeholt' });
+  assert.equal(nextStage({ stage: 'done' }), null);
+  assert.ok(isOpenOrder({ status: 'done', stage: 'kitchen' }));
+  assert.ok(isOpenOrder({ status: 'done', stage: 'out' }));
+  assert.ok(!isOpenOrder({ status: 'done', stage: 'done' }));
+  assert.ok(!isOpenOrder({ status: 'cancelled', stage: 'kitchen' }));
+  assert.ok(!isOpenOrder({ status: 'done' }), 'Bestellungen aus älteren Versionen gelten als erledigt');
+  const now = new Date('2026-11-24T17:00:00');
+  assert.equal(timeToday('19:30', now).getTime(), new Date('2026-11-24T19:30:00').getTime());
+  assert.equal(timeToday('7:05', now).getHours(), 7);
+  assert.equal(timeToday('', now), null);
+  assert.equal(timeToday('25:00', now), null);
+  assert.deepEqual([5, 59, 60, 75, 120, -12].map(fmtMinutes), ['5 Min.', '59 Min.', '1 Std.', '1 Std. 15 Min.', '2 Std.', '12 Min.']);
 });
 
 test('Bestellarten: nur Lieferung und Abholung', () => {

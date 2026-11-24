@@ -3,7 +3,7 @@
 import { html, useEffect, useMemo, useRef, useState, Icon, Modal, MoneyInput, Segmented, Stepper, useAppState } from '../lib/ui.js';
 import * as store from '../lib/store.js';
 import { compareNr, eur, fold, uid } from '../lib/util.js';
-import { ORDER_TYPES, PAYMENTS, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, selectionEntries } from '../lib/order.js';
+import { ORDER_TYPES, PAYMENTS, timeToday, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, selectionEntries } from '../lib/order.js';
 import { customerReceipt, kitchenTickets } from '../print/receipt.js';
 import { printReceipts } from '../print/index.js';
 import { CustomerPicker } from './customers.js';
@@ -22,7 +22,7 @@ function feeHint(cart) {
   if (!cart.customer || !info) return '';
   if (info.source === 'zone') return html`<span class="fee-hint ok">· automatisch (${info.place})</span>`;
   if (info.source === 'customer') return html`<span class="fee-hint ok">· wie bei der letzten Lieferung</span>`;
-  if (info.source === 'none') return html`<span class="fee-hint warn">· Ort nicht in den Liefergebieten – bitte wählen</span>`;
+  if (info.source === 'none') return html`<span class="fee-hint bad">· Ort nicht in den Liefergebieten – bitte wählen</span>`;
   return '';
 }
 
@@ -225,6 +225,8 @@ function Checkout({ onClose }) {
     <div class="checkout-total"><span>${ORDER_TYPES[cart.type]} · ${totals.count} Artikel</span><strong>${eur(totals.total)}</strong></div>
     ${cart.type === 'delivery' && !cart.customer?.street && html`<p class="warn">Achtung: Es ist noch keine Lieferadresse ausgewählt.</p>`}
     ${cart.type === 'delivery' && totals.deliveryFee === 0 && html`<p class="warn">Hinweis: Es sind keine Lieferkosten berechnet.</p>`}
+    ${cart.dueTime && html`<p class="due-info">Vorbestellung: ${ORDER_TYPES[cart.type]} um <strong>${cart.dueTime} Uhr</strong></p>`}
+    ${cart.dueTime && timeToday(cart.dueTime) < new Date() && html`<p class="warn">Achtung: ${cart.dueTime} Uhr ist schon vorbei.</p>`}
     <h3 class="section-title">Zahlung</h3>
     <${Segmented} options=${Object.entries(PAYMENTS).map(([value, label]) => ({ value, label }))} value=${payment} onChange=${setPayment} />
     <h3 class="section-title">Drucken</h3>
@@ -293,10 +295,19 @@ function Ticket({ onEdit, onCustomer, onCheckout }) {
     </div>
 
     <div class="ticket-foot">
+      <div class="due-row">
+        <span class="due-label">Zeit</span>
+        <button class="chip ${cart.dueTime ? '' : 'on'}" onClick=${() => store.setCart({ dueTime: '' })}>Sofort</button>
+        <label class="chip time-chip ${cart.dueTime ? 'on' : ''}">
+          <${Icon} name="clock" size=${16} />
+          <input type="time" step="300" value=${cart.dueTime} aria-label="Vorbestellung: Uhrzeit" onChange=${(e) => store.setCart({ dueTime: e.target.value })} />
+          ${!cart.dueTime && html`<span>Uhrzeit</span>`}
+        </label>
+      </div>
       <input
         type="text"
         class="input note-input"
-        placeholder="Notiz zur Bestellung (z. B. 19:30 Uhr, klingeln bei …)"
+        placeholder="Notiz zur Bestellung (z. B. klingeln bei …)"
         value=${cart.note}
         onInput=${(e) => store.setCart({ note: e.target.value })}
       />

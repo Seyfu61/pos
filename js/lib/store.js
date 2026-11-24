@@ -3,7 +3,7 @@
 import * as db from './db.js';
 import { clone, dayKey, normPhone, uid } from './util.js';
 import { indexCustomer } from './csv.js';
-import { ORDER_TYPES, autoDeliveryFee, categoryStation, orderTotals, sameLine } from './order.js';
+import { ORDER_TYPES, autoDeliveryFee, categoryStation, isOpenOrder, orderTotals, sameLine, timeToday } from './order.js';
 import { DEFAULT_SETTINGS, mergeSettings } from '../data/defaults.js';
 import { CATEGORIES, MENU_SOURCE, PRODUCTS } from '../data/menu.js';
 
@@ -17,6 +17,7 @@ export const state = {
   cart: null,
   toasts: [],
   persisted: false,
+  openOrders: [], // noch nicht erledigte Bestellungen (Bereich "Offen")
 };
 
 const listeners = new Set();
@@ -81,7 +82,29 @@ export function migrateMenu(menu, seed = seedMenu()) {
 }
 
 function newCart() {
-  return { type: state.settings.order.defaultType, customer: null, lines: [], deliveryFee: 0, note: '' };
+  return { type: state.settings.order.defaultType, customer: null, lines: [], deliveryFee: 0, note: '', dueTime: '' };
+}
+
+/** Offene Bestellungen der letzten zwei Tage laden (nach Mitternacht bleibt eine späte Bestellung sichtbar). */
+async function loadOpenOrders() {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const lists = await Promise.all([db.ordersByDay(dayKey()), db.ordersByDay(dayKey(yesterday))]);
+  return lists.flat().filter(isOpenOrder);
+}
+
+function replaceOpen(order) {
+  const rest = state.openOrders.filter((o) => o.id !== order.id);
+  state.openOrders = isOpenOrder(order) ? [...rest, order] : rest;
+  emit();
+}
+
+/** Bestellung einen Schritt weiter (oder zurück) setzen: kitchen | out | ready | done */
+export async function setStage(order, stage) {
+  const updated = { ...order, stage, stageAt: { ...(order.stageAt ?? {}), [stage]: new Date().toISOString() } };
+  await db.put('orders', updated);
+  replaceOpen(updated);
+  return updated;
 }
 
 export async function init() {
@@ -93,7 +116,8 @@ export async function init() {
     state.menu = menu && !outdated ? migrateMenu(menu) : seedMenu();
     if (state.menu !== menu) await db.kvSet('menu', state.menu);
     state.customers = customers.map(indexCustomer);
-    state.cart = cart ?? newCart();
+    state.cart = { ...newCart(), ...(cart ?? {}) };
+    state.openOrders = await loadOpenOrders();
     if (!ORDER_TYPES[state.cart.type]) state.cart.type = state.settings.order.defaultType;
     state.persisted = (await db.requestPersistence()) || (await db.isPersisted());
     state.ready = true;
@@ -343,10 +367,14 @@ export async function completeOrder({ payment }) {
   const cart = state.cart;
   const totals = cartTotals();
   const now = new Date();
+  const due = cart.dueTime ? timeToday(cart.dueTime, now) : null;
   const order = await db.createOrder({
     createdAt: now.toISOString(),
     day: dayKey(now),
     status: 'done',
+    stage: 'kitchen',
+    stageAt: { kitchen: now.toISOString() },
+    dueAt: due ? due.toISOString() : null,
     type: cart.type,
     customer: cart.customer ? publicCustomer(cart.customer) : null,
     lines: clone(cart.lines),
@@ -358,6 +386,7 @@ export async function completeOrder({ payment }) {
     payment,
   });
   clearCart();
+  replaceOpen(order);
   // Lieferkosten beim Kunden merken – für Orte, die in keinem Liefergebiet stehen.
   if (order.type === 'delivery' && order.customer?.id != null) {
     const c = state.customers.find((x) => x.id === order.customer.id);
@@ -371,6 +400,7 @@ export const loadOrders = (day) => db.ordersByDay(day).then((list) => list.sort(
 export async function cancelOrder(order) {
   const updated = { ...order, status: 'cancelled', cancelledAt: new Date().toISOString() };
   await db.put('orders', updated);
+  replaceOpen(updated);
   return updated;
 }
 
@@ -382,6 +412,7 @@ export function reorder(order) {
     lines: order.lines.map((l) => ({ ...clone(l), key: uid() })),
     deliveryFee: order.deliveryFee ?? 0,
     note: '',
+    dueTime: '',
   };
   cartChanged();
   setView('pos');

@@ -227,3 +227,59 @@ export function autoDeliveryFee(customer, zones = []) {
   if (Number.isInteger(customer?.lastFee)) return { fee: customer.lastFee, source: 'customer' };
   return { fee: 0, source: 'none' };
 }
+
+// --- Bearbeitungsstand und Fälligkeit ------------------------------------------------------
+
+/** Ablauf einer Bestellung: Küche -> unterwegs (Lieferung) bzw. abholbereit (Abholung) -> erledigt. */
+export const STAGES = {
+  kitchen: 'In der Küche',
+  out: 'Unterwegs',
+  ready: 'Abholbereit',
+  done: 'Erledigt',
+};
+
+/** Nächster Schritt und Beschriftung des Knopfes dafür. */
+export function nextStage(order) {
+  if (order.stage === 'kitchen') return order.type === 'pickup' ? { stage: 'ready', label: 'Abholbereit' } : { stage: 'out', label: 'Unterwegs' };
+  if (order.stage === 'out') return { stage: 'done', label: 'Geliefert' };
+  if (order.stage === 'ready') return { stage: 'done', label: 'Abgeholt' };
+  return null;
+}
+
+/** Noch nicht erledigt? (Bestellungen aus älteren Versionen haben keinen Stand und gelten als erledigt.) */
+export function isOpenOrder(order) {
+  return order.status !== 'cancelled' && Boolean(order.stage) && order.stage !== 'done';
+}
+
+/** "19:30" -> Zeitpunkt heute um 19:30 (bezogen auf `now`). Ungültig -> null. */
+export function timeToday(hhmm, now = new Date()) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm ?? '').trim());
+  if (!m || +m[1] > 23 || +m[2] > 59) return null;
+  const d = new Date(now);
+  d.setHours(+m[1], +m[2], 0, 0);
+  return d;
+}
+
+/**
+ * Wann muss die Bestellung raus? Vorbestellung: gewünschte Uhrzeit. Sonst: Eingang + Zielzeit der Bestellart.
+ * @returns {{ due:Date, left:number, elapsed:number, level:'ok'|'soon'|'late'|'pre', preorder:boolean }}
+ *   left/elapsed in ganzen Minuten; level: pre = Vorbestellung, die noch über eine Stunde Zeit hat
+ */
+export function orderDue(order, orderSettings = {}, now = new Date()) {
+  const prep = orderSettings.prepMinutes?.[order.type] ?? (order.type === 'pickup' ? 20 : 45);
+  const soon = orderSettings.soonMinutes ?? 10;
+  const created = new Date(order.createdAt);
+  const preorder = Boolean(order.dueAt);
+  const due = preorder ? new Date(order.dueAt) : new Date(created.getTime() + prep * 60000);
+  const left = Math.floor((due - now) / 60000);
+  const elapsed = Math.max(0, Math.floor((now - created) / 60000));
+  const level = left < 0 ? 'late' : left <= soon ? 'soon' : preorder && left > 60 ? 'pre' : 'ok';
+  return { due, left, elapsed, level, preorder };
+}
+
+/** 75 -> "1 Std. 15 Min." */
+export function fmtMinutes(min) {
+  const m = Math.abs(Math.round(min));
+  if (m < 60) return `${m} Min.`;
+  return `${Math.floor(m / 60)} Std.${m % 60 ? ` ${m % 60} Min.` : ''}`;
+}
