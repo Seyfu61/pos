@@ -3,7 +3,7 @@
 import { html, useMemo, useState, Icon, Modal, saveFile, pickFile, useAppState } from '../lib/ui.js';
 import * as store from '../lib/store.js';
 import { CUSTOMER_FIELDS, customersToRows, decodeText, guessMapping, looksLikeHeader, parseCsv, rowsToCustomers, searchCustomers, toCsv } from '../lib/csv.js';
-import { dayKey } from '../lib/util.js';
+import { compareNr, dayKey } from '../lib/util.js';
 
 const address = (c) => [c.street, [c.zip, c.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
@@ -55,10 +55,24 @@ export function CustomerForm({ customer, onSaved, onClose }) {
 
 function CustomerRow({ c, onClick }) {
   return html`<button class="customer-row" onClick=${onClick}>
-    <span class="customer-row-main"><strong>${c.name || '(ohne Namen)'}</strong><span>${address(c) || '–'}</span>${c.note && html`<em>${c.note}</em>`}</span>
-    <span class="customer-row-side"><span>${c.phone}</span>${c.phone2 && html`<span>${c.phone2}</span>`}${c.nr && html`<span class="muted">Nr. ${c.nr}</span>`}</span>
+    <span class="cust-nr">${c.nr || '–'}</span>
+    <span class="cust-name"><strong>${c.name || '(ohne Namen)'}</strong>${c.note && html`<em>${c.note}</em>`}</span>
+    <span class="cust-addr">${c.street && html`<span>${c.street}</span>`}<span>${[c.zip, c.city].filter(Boolean).join(' ') || (c.street ? '' : '–')}</span></span>
+    <span class="cust-phone"><span>${c.phone || '–'}</span>${c.phone2 && html`<span>${c.phone2}</span>`}</span>
   </button>`;
 }
+
+/** Tabelle: Kundennummer | Name | Adresse | Telefon */
+function CustomerTable({ customers, onPick, children }) {
+  return html`<div class="customer-list" role="list">
+    <div class="customer-head" aria-hidden="true"><span>Nr.</span><span>Name</span><span>Adresse</span><span>Telefon</span></div>
+    ${customers.map((c) => html`<${CustomerRow} key=${c.id} c=${c} onClick=${() => onPick(c)} />`)}
+    ${children}
+  </div>`;
+}
+
+/** Sortierung nach Kundennummer (99 vor 100), Kunden ohne Nummer danach nach Name. */
+const byNr = (a, b) => compareNr(String(a.nr ?? ''), String(b.nr ?? '')) || String(a.name).localeCompare(String(b.name), 'de');
 
 // --- Auswahl an der Kasse -------------------------------------------------------------
 
@@ -66,12 +80,14 @@ export function CustomerPicker({ onPick, onClose }) {
   const { customers } = useAppState();
   const [query, setQuery] = useState('');
   const [form, setForm] = useState(null);
-  const results = useMemo(() => searchCustomers(customers, query, 30), [customers, query]);
+  const sorted = useMemo(() => [...customers].sort(byNr), [customers]);
+  const results = useMemo(() => searchCustomers(sorted, query, 30), [sorted, query]);
   const isNumber = /^[\d\s+\-/()]+$/.test(query.trim());
 
   if (form) return html`<${CustomerForm} customer=${form} onSaved=${(c) => onPick(stripIndex(c))} onClose=${() => setForm(null)} />`;
   return html`<${Modal}
     title="Kunde wählen"
+    size="lg"
     onClose=${onClose}
     footer=${html`<span class="muted small">${customers.length} Kunden gespeichert</span><span class="spacer"></span>
       <button class="btn primary" onClick=${() => setForm(query.trim() ? (isNumber ? { phone: query.trim() } : { name: query.trim() }) : {})}>
@@ -91,11 +107,10 @@ export function CustomerPicker({ onPick, onClose }) {
         onInput=${(e) => setQuery(e.target.value)}
       />
     </div>
-    <div class="customer-list">
-      ${results.map((c) => html`<${CustomerRow} key=${c.id} c=${c} onClick=${() => onPick(stripIndex(c))} />`)}
+    <${CustomerTable} customers=${results} onPick=${(c) => onPick(stripIndex(c))}>
       ${results.length === 0 &&
       html`<div class="empty"><p>${customers.length === 0 ? 'Noch keine Kunden gespeichert. Unter „Kunden“ lässt sich eine Liste importieren.' : 'Kein Kunde gefunden.'}</p></div>`}
-    </div>
+    <//>
   <//>`;
 }
 
@@ -200,7 +215,7 @@ export function CustomersView() {
   const [query, setQuery] = useState('');
   const [form, setForm] = useState(null);
   const [importFile, setImportFile] = useState(null);
-  const sorted = useMemo(() => [...customers].sort((a, b) => String(a.name).localeCompare(String(b.name), 'de')), [customers]);
+  const sorted = useMemo(() => [...customers].sort(byNr), [customers]);
   const results = useMemo(() => searchCustomers(sorted, query, 200), [sorted, query]);
 
   const exportCsv = () => saveFile(`kunden-${dayKey()}.csv`, toCsv(customersToRows(sorted)), 'text/csv');
@@ -223,11 +238,10 @@ export function CustomersView() {
             <p>Noch keine Kunden gespeichert.</p>
             <p class="muted">Über „Importieren“ lässt sich eine vorhandene Kundenliste als CSV-Datei einlesen<br />(z. B. aus Excel: Speichern unter › CSV). Die Spalten werden beim Import zugeordnet.</p>
           </div>`
-        : html`<div class="customer-list card">
-            ${results.map((c) => html`<${CustomerRow} key=${c.id} c=${c} onClick=${() => setForm(stripIndex(c))} />`)}
+        : html`<div class="card"><${CustomerTable} customers=${results} onPick=${(c) => setForm(stripIndex(c))}>
             ${results.length === 0 && html`<div class="empty"><p>Kein Kunde gefunden.</p></div>`}
             ${results.length === 200 && html`<p class="muted small center">Es werden die ersten 200 Treffer angezeigt – Suche verfeinern.</p>`}
-          </div>`}
+          <//></div>`}
     </div>
     ${form && html`<${CustomerForm} customer=${form} onClose=${() => setForm(null)} />`}
     ${importFile && html`<${ImportWizard} file=${importFile} onClose=${() => setImportFile(null)} />`}

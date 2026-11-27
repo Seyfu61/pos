@@ -76,7 +76,15 @@ try {
   await page.getByRole('button', { name: '3 Kunden importieren' }).click();
   await toast('Import fertig: 3 neu');
   await page.locator('.customer-row', { hasText: 'Jürgen Müller' }).waitFor();
-  assert.match(await page.locator('.customer-row', { hasText: 'Jürgen Müller' }).innerText(), /Göttinger Straße 12a, 37124 Rosdorf/);
+  // Tabelle: Nr. | Name | Adresse | Telefon, sortiert nach Kundennummer
+  assert.deepEqual(await page.locator('.customer-head span').allInnerTexts(), ['NR.', 'NAME', 'ADRESSE', 'TELEFON']);
+  assert.deepEqual(await page.locator('.customer-row .cust-nr').allInnerTexts(), ['1001', '1002', '1003']);
+  const juergen = page.locator('.customer-row', { hasText: 'Jürgen Müller' });
+  assert.deepEqual(
+    await Promise.all(['.cust-nr', '.cust-name', '.cust-addr', '.cust-phone'].map((c) => juergen.locator(c).innerText())),
+    ['1001', 'Jürgen Müller\nHinterhaus', 'Göttinger Straße 12a\n37124 Rosdorf', '05509 12345'],
+  );
+  assert.equal(await page.locator('.customer-row', { hasText: 'Ayse Yilmaz' }).locator('.cust-phone').innerText(), '0551/998877\n0170 1234567');
   await shot('kunden');
 
   // --- Bestellung aufnehmen ---------------------------------------------------------------
@@ -192,6 +200,11 @@ try {
     await page.getByPlaceholder('Telefonnummer, Name oder Straße').fill(query);
     await page.locator('.modal .customer-row', { hasText: name }).click();
   };
+  // Auswahl an der Kasse als Tabelle
+  await page.locator('.customer-btn').click();
+  assert.deepEqual(await page.locator('.modal .customer-row .cust-nr').allInnerTexts(), ['1001', '1002', '1003']);
+  await shot('kundenauswahl');
+  await page.locator('.modal-head .btn').click();
   await pickCustomer('Yilmaz', 'Ayse Yilmaz'); // Obernjesa -> 1,80
   assert.match(await page.locator('.fee-label').innerText(), /automatisch \(Obernjesa\)/);
   assert.equal(await page.locator('.fee .chip.on').innerText(), '1,80');
@@ -311,10 +324,13 @@ try {
   assert.match(await page.locator('.line', { hasText: 'Bauernsalat' }).innerText(), /groß[\s\S]*Dressing: Essig\+Öl[\s\S]*9,60/);
   // Neuer Artikel "Joghurt groß" unter Beilagen, ohne Dialog direkt auf den Bon
   await page.locator('.cat', { hasText: 'Beilagen' }).click();
+  assert.deepEqual((await page.locator('.product .product-name').allInnerTexts()).slice(-2), ['Joghurt klein', 'Joghurt groß']);
   await page.locator('.product', { hasText: 'Joghurt groß' }).click();
   assert.match(await page.locator('.line', { hasText: 'Joghurt groß' }).innerText(), /2,50/);
+  await page.locator('.product', { hasText: 'Joghurt klein' }).click();
+  assert.match(await page.locator('.line', { hasText: 'Joghurt klein' }).innerText(), /1,50/);
   // wieder entfernen
-  for (const name of ['Gyros', 'Nuggets', 'Bauernsalat', 'Joghurt']) await page.locator('.line', { hasText: name }).locator('.qty-btn').first().click();
+  for (const name of ['Gyros', 'Nuggets', 'Bauernsalat', 'Joghurt groß', 'Joghurt klein']) await page.locator('.line', { hasText: name }).locator('.qty-btn').first().click();
   assert.equal(await page.locator('.line').count(), 0);
 
   // Position bearbeiten (Extras für Burger), freier Artikel

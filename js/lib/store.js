@@ -54,7 +54,20 @@ export function setView(view) {
 // --- Start ---------------------------------------------------------------------
 
 // 2: Auswahl bei Burgern/Gyros/Nuggets, Joghurt groß, Getränke ohne Küchenbon · 3: Dressing-Auswahl bei Salaten
-export const MENU_SCHEMA = 3;
+// 4: Joghurt klein
+export const MENU_SCHEMA = 4;
+
+// Eigene Artikel der Kasse (nicht von bringstar) und ab welcher Stufe es sie gibt.
+const LOCAL_SINCE = { 'joghurt-gross': 2, 'joghurt-klein': 4 };
+
+/** Artikel an der Stelle einfügen, an der er in der mitgelieferten Speisekarte steht (vor seinem Nachfolger). */
+function insertLikeSeed(products, product, seedProducts) {
+  const at = seedProducts.findIndex((p) => p.id === product.id);
+  const next = seedProducts.slice(at + 1).find((p) => p.cat === product.cat && products.some((x) => x.id === p.id));
+  const i = next ? products.findIndex((x) => x.id === next.id) : products.findLastIndex((x) => x.cat === product.cat) + 1;
+  if (i <= 0 && !next) products.push(product);
+  else products.splice(i, 0, product);
+}
 
 export function seedMenu() {
   return { schema: MENU_SCHEMA, source: MENU_SOURCE, categories: clone(CATEGORIES), products: clone(PRODUCTS).map((p) => ({ ...p, active: true })) };
@@ -71,11 +84,14 @@ export function migrateMenu(menu, seed = seedMenu()) {
   // Auswahlgruppen nur bei Artikeln ergänzen, die noch keine haben – nichts Vorhandenes wird überschrieben.
   const products = menu.products.map((p) => (p.opts || !seedById.get(p.id)?.opts ? p : { ...p, opts: clone(seedById.get(p.id).opts) }));
   let categories = menu.categories;
+  // Neue eigene Artikel kommen dazu, sofern ihre Kategorie noch existiert. Was es schon in einer früheren Stufe gab
+  // und jetzt fehlt, wurde bewusst gelöscht und kommt nicht zurück.
+  const known = new Set(menu.products.map((p) => p.id));
+  const cats = new Set(menu.categories.map((c) => c.id));
+  for (const p of seed.products) {
+    if (typeof p.id === 'string' && !known.has(p.id) && cats.has(p.cat) && (LOCAL_SINCE[p.id] ?? 2) > from) insertLikeSeed(products, clone(p), seed.products);
+  }
   if (from < 2) {
-    const known = new Set(menu.products.map((p) => p.id));
-    const cats = new Set(menu.categories.map((c) => c.id));
-    // Eigene Artikel der Kasse haben Text-IDs (bringstar: Zahlen) – sie kommen dazu, sofern ihre Kategorie noch existiert.
-    for (const p of seed.products) if (typeof p.id === 'string' && !known.has(p.id) && cats.has(p.cat)) products.push(clone(p));
     categories = categories.map((c) => (/getränk/i.test(c.name) && (c.station ?? 'kitchen') === 'kitchen' ? { ...c, station: 'none' } : c));
   }
   return { ...menu, schema: MENU_SCHEMA, categories, products };

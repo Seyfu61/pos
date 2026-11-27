@@ -36,7 +36,7 @@ test('Artikelnummern sortieren', () => {
 
 test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   const byNr = (nr) => PRODUCTS.filter((p) => p.nr === nr);
-  assert.equal(PRODUCTS.length, 164);
+  assert.equal(PRODUCTS.length, 165);
   assert.equal(CATEGORIES.length, 14);
   assert.deepEqual(byNr('220')[0].v, [['30cm', 950], ['40cm', 1740], ['40x60cm', 2790]]);
   assert.equal(byNr('220')[0].name, 'Pizza Margherita');
@@ -47,6 +47,9 @@ test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   // eigener Artikel (nicht bei bringstar)
   const joghurt = PRODUCTS.find((p) => p.id === 'joghurt-gross');
   assert.deepEqual([joghurt.name, joghurt.v, CATEGORIES.find((c) => c.id === joghurt.cat).name], ['Joghurt groß', [['', 250]], 'Beilagen']);
+  const klein = PRODUCTS.find((p) => p.id === 'joghurt-klein');
+  assert.deepEqual([klein.name, klein.v, klein.cat], ['Joghurt klein', [['', 150]], joghurt.cat]);
+  assert.equal(PRODUCTS.indexOf(klein) + 1, PRODUCTS.indexOf(joghurt), 'klein direkt vor groß');
   // Jede Artikelnummer ist eindeutig, jeder Artikel hat einen Preis und eine bekannte Kategorie.
   const numbered = PRODUCTS.filter((p) => p.nr).map((p) => p.nr);
   assert.equal(new Set(numbered).size, numbered.length);
@@ -201,6 +204,20 @@ test('Von Hand geänderte Speisekarte bekommt die neuen Auswahlmöglichkeiten, e
   assert.equal(m3.products.find((p) => p.name === 'Bauernsalat').opts[0].name, 'Dressing');
   assert.ok(!m3.products.some((p) => p.id === 'joghurt-gross'), 'gelöschter eigener Artikel kommt nicht zurück');
   assert.equal(m3.categories.find((c) => c.name === 'Getränke').station, 'kitchen');
+  assert.ok(m3.products.some((p) => p.id === 'joghurt-klein'), 'Joghurt klein kommt dazu (neu in Stufe 4)');
+
+  // Stand nach Stufe 3: Joghurt klein kommt dazu, und zwar direkt vor Joghurt groß
+  const v3 = JSON.parse(JSON.stringify(seed));
+  v3.schema = 3;
+  v3.edited = true;
+  v3.products = v3.products.filter((p) => p.id !== 'joghurt-klein');
+  const m4 = migrateMenu(v3, seed);
+  const ids = m4.products.map((p) => p.id);
+  assert.equal(ids.indexOf('joghurt-klein') + 1, ids.indexOf('joghurt-gross'));
+  assert.equal(m4.products.length, seed.products.length);
+  // ... aber nicht, wenn der Artikel nach Stufe 4 gelöscht wurde
+  const v4 = { ...m4, products: m4.products.filter((p) => p.id !== 'joghurt-klein') };
+  assert.equal(migrateMenu(v4, seed), v4);
 });
 
 test('Liefergebiete: Lieferkosten nach Ort des Kunden', () => {

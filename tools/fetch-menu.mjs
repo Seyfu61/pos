@@ -83,7 +83,10 @@ function buildOptions(cat, item) {
 }
 
 // Artikel, die es bei bringstar nicht gibt (feste IDs, damit Bestellungen und Änderungen zuordenbar bleiben).
-const LOCAL_PRODUCTS = [{ id: 'joghurt-gross', cat: /^beilagen$/i, name: 'Joghurt groß', desc: 'hausgemachtes Joghurtdressing', v: [['', 250]] }];
+const LOCAL_PRODUCTS = [
+  { id: 'joghurt-klein', cat: /^beilagen$/i, name: 'Joghurt klein', desc: 'hausgemachtes Joghurtdressing', v: [['', 150]] },
+  { id: 'joghurt-gross', cat: /^beilagen$/i, name: 'Joghurt groß', desc: 'hausgemachtes Joghurtdressing', v: [['', 250]] },
+];
 
 // Tippfehler der Quelle, die beim Import korrigiert werden (Namen und Beschreibungen).
 const TEXT_FIXES = [

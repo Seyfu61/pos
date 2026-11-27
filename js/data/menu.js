@@ -1,6 +1,6 @@
 // Automatisch erzeugt von tools/fetch-menu.mjs – nicht von Hand bearbeiten.
 // Quelle: https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice
-export const MENU_SOURCE = {"url":"https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice","fetchedAt":"2026-11-24","rev":"kq5wid"};
+export const MENU_SOURCE = {"url":"https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice","fetchedAt":"2026-11-27","rev":"iec2vn"};
 
 // tax: MwSt.-Satz in %, extras: Kategorie mit den passenden Extras, isExtras: reine Extras-Kategorie,
 // station: auf welchem Küchenbon die Artikel stehen (pizza | kitchen | none = auf keinem)
@@ -180,6 +180,7 @@ export const PRODUCTS = [
   {"id":13311,"cat":257,"nr":"","name":"Pommes","desc":"","v":[["klein",390],["groß",590]]},
   {"id":13800,"cat":257,"nr":"","name":"Zaziki","desc":"","v":[["klein",180],["groß",300]]},
   {"id":13313,"cat":257,"nr":"","name":"Gebratene Peperoni","desc":"","v":[["",590]]},
+  {"id":"joghurt-klein","cat":257,"nr":"","name":"Joghurt klein","desc":"hausgemachtes Joghurtdressing","v":[["",150]]},
   {"id":"joghurt-gross","cat":257,"nr":"","name":"Joghurt groß","desc":"hausgemachtes Joghurtdressing","v":[["",250]]},
   {"id":13805,"cat":276,"nr":"","name":"Wasser still","desc":"Preise enthalten Pfand","v":[["0,5 l",175]]},
   {"id":13804,"cat":276,"nr":"","name":"Coca-Cola","desc":"Preise enthalten Pfand","v":[["0,33 l",250],["1,0 l",325]]},

@@ -21,9 +21,10 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt und ohne Server – alle Daten lie
 - **Vorbestellung**: an der Kasse statt „Sofort“ eine Uhrzeit wählen; steht groß auf Küchen- und Kundenbon.
 - **Speisekarte**: 163 Artikel in 14 Kategorien (plus eigene), importiert von
   [bringstar.jetzt](https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice) – mit den dortigen
-  Artikelnummern, Größen und Preisen, dazu „Joghurt groß“ (2,50 €); Tippfehler der Quelle werden beim Import korrigiert
+  Artikelnummern, Größen und Preisen, dazu „Joghurt klein“ (1,50 €) und „Joghurt groß“ (2,50 €); Tippfehler der Quelle werden beim Import korrigiert
   (Liste in `tools/fetch-menu.mjs`). In den Einstellungen bearbeitbar.
-- **Kunden**: Suche nach Telefonnummer, Name oder Straße; Anlegen direkt an der Kasse; **CSV-Import** mit Spaltenzuordnung.
+- **Kunden**: Liste als Tabelle (Kundennummer | Name | Adresse | Telefon, sortiert nach Kundennummer); Suche nach
+  Telefonnummer, Name oder Straße; Anlegen direkt an der Kasse; **CSV-Import** mit Spaltenzuordnung.
 - **Bons**: Küchenbons getrennt für **Pizzaseite** und **Küchenseite** (groß, ohne Preise; darunter klein, was die
   jeweils andere Seite für dieselbe Bestellung macht; Getränke stehen auf keinem Küchenbon) und Kundenbon (mit Adresse, MwSt.-Ausweis, standardmäßig 2×).
   Welche Kategorie auf welchem Küchenbon steht, lässt sich je Kategorie einstellen. Nachdruck, Storno, Tagesbericht.
