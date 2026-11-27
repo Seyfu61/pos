@@ -49,7 +49,7 @@ try {
   await page.locator('select.input').selectOption('webprnt');
   await page.getByPlaceholder('192.168.178.50').fill(`localhost:${PRINTER_PORT}`);
   await page.getByPlaceholder('192.168.178.50').blur();
-  await page.getByLabel('Kassenschublade bei Barzahlung öffnen').check();
+  await page.getByLabel('Kassenschublade bei jeder Bestellung öffnen').check();
   await page.getByRole('button', { name: 'Testdruck' }).click();
   await toast('Testdruck gesendet');
   assert.equal(printer.jobs.length, 1, 'Testdruck kommt am Drucker an');
@@ -203,12 +203,10 @@ try {
   assert.match(await page.locator('.total-row.grand').innerText(), /53,95/); // 22,40 + 2×12,90 + 3,25 + 2,50
   await shot('kasse-bestellung');
 
+  // Abschließen ohne Zwischenfenster: bar, Bons nach den Druckereinstellungen
   await page.getByRole('button', { name: /Abschließen ·/ }).click();
-  assert.match(await page.locator('.checkout-total').innerText(), /53,95/);
-  assert.equal(await page.locator('.modal', { hasText: /Rückgeld|Gegeben/ }).count(), 0, 'keine Rückgeld-Funktion');
-  await shot('abschluss');
-  await page.getByRole('button', { name: 'Abschließen & drucken' }).click();
   await toast('Bestellung #1 gespeichert und gedruckt');
+  assert.equal(await page.locator('.modal').count(), 0, 'kein Abschluss-Fenster');
 
   const job = printer.jobs[1];
   assert.deepEqual(
@@ -299,7 +297,15 @@ try {
   page = await ctx2.newPage();
   page.on('pageerror', (e) => problems.push(`Seitenfehler: ${e.message}`));
   page.on('console', (m) => m.type() === 'error' && !/Failed to load resource|ERR_CONNECTION_REFUSED|PrintError/.test(m.text()) && problems.push(`Konsole: ${m.text()}`));
-  page.on('dialog', (d) => d.accept());
+  const dialogs = [];
+  let dismissNext = false;
+  page.on('dialog', (d) => {
+    dialogs.push(d.message());
+    if (dismissNext) {
+      dismissNext = false;
+      d.dismiss();
+    } else d.accept();
+  });
   await page.addInitScript(() => {
     window.__printCalls = 0;
     window.print = () => window.__printCalls++;
@@ -429,10 +435,8 @@ try {
   await page.locator('.segmented button', { hasText: 'Abholung' }).click();
   await page.getByLabel('Vorbestellung: Uhrzeit').fill('19:30');
   await page.getByRole('button', { name: /Abschließen ·/ }).click();
-  assert.match(await page.locator('.due-info').innerText(), /Abholung um 19:30 Uhr/);
-  await page.locator('.segmented button', { hasText: 'Karte' }).click();
-  await page.getByRole('button', { name: 'Abschließen', exact: true }).click();
   await toast('kein Drucker eingerichtet');
+  assert.equal(dialogs.length, 0, 'keine Rückfrage, wenn nichts fehlt');
   await page.locator('.cat.on', { hasText: /^Pizza$/ }).waitFor({ timeout: 3000 }); // nach der Bestellung zurück auf die erste Kategorie
   assert.equal(await page.getByPlaceholder('Artikel-Nr. oder Name').inputValue(), '');
   assert.equal(await page.locator('.chip', { hasText: 'Sofort' }).getAttribute('class').then((c) => c.includes('on')), true, 'neue Bestellung wieder "Sofort"');
@@ -474,8 +478,13 @@ try {
   await page.getByPlaceholder('192.168.178.50').blur();
   await nav('Kasse');
   await page.locator('.segmented button', { hasText: 'Lieferung' }).click();
+  // Keine Lieferkosten (Rosdorf steht in keinem Liefergebiet) -> Rückfrage; "Abbrechen" schließt nicht ab
+  dismissNext = true;
   await page.getByRole('button', { name: /Abschließen ·/ }).click();
-  await page.getByRole('button', { name: 'Abschließen & drucken' }).click();
+  await page.waitForTimeout(300);
+  assert.match(dialogs.at(-1), /keine Lieferkosten berechnet[\s\S]*Trotzdem abschließen\?/);
+  assert.equal(await page.locator('.ticket-lines .line').count(), 1, 'abgebrochen: Bon bleibt');
+  await page.getByRole('button', { name: /Abschließen ·/ }).click();
   await toast('ist gespeichert, aber: Drucker nicht erreichbar');
 
   // --- Offene Bestellungen: 50 Minuten später -------------------------------------------------

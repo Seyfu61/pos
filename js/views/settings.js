@@ -91,10 +91,10 @@ function PrinterTab() {
           <${Segmented} options=${[{ value: 80, label: '80 mm (mC-Print3)' }, { value: 58, label: '58 mm' }]} value=${p.paper} onChange=${(paper) => set({ paper })} />
         </div>
         <div class="field wide">
-          <label class="check"><input type="checkbox" checked=${p.printKitchen} onChange=${(e) => set({ printKitchen: e.target.checked })} /> Küchenbons standardmäßig drucken (Pizzaseite und Küchenseite getrennt)</label>
-          <label class="check"><input type="checkbox" checked=${p.printCustomer} onChange=${(e) => set({ printCustomer: e.target.checked })} /> Kundenbon standardmäßig drucken</label>
+          <label class="check"><input type="checkbox" checked=${p.printKitchen} onChange=${(e) => set({ printKitchen: e.target.checked })} /> Küchenbons drucken (Pizzaseite und Küchenseite getrennt)</label>
+          <label class="check"><input type="checkbox" checked=${p.printCustomer} onChange=${(e) => set({ printCustomer: e.target.checked })} /> Kundenbon drucken</label>
           <label class="check"><input type="checkbox" checked=${p.mapsQr !== false} onChange=${(e) => set({ mapsQr: e.target.checked })} /> Google-Maps-QR-Code mit der Lieferadresse auf dem Kundenbon</label>
-          ${star && html`<label class="check"><input type="checkbox" checked=${p.drawer} onChange=${(e) => set({ drawer: e.target.checked })} /> Kassenschublade bei Barzahlung öffnen</label>`}
+          ${star && html`<label class="check"><input type="checkbox" checked=${p.drawer} onChange=${(e) => set({ drawer: e.target.checked })} /> Kassenschublade bei jeder Bestellung öffnen</label>`}
         </div>
       </div>
 

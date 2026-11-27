@@ -1080,19 +1080,6 @@ textarea.input {
   letter-spacing: 0.04em;
 }
 
-.checkout-total {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  color: var(--muted);
-}
-.checkout-total strong {
-  font-size: 36px;
-  font-weight: 750;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
 .receipt-preview {
   display: flex;
   justify-content: center;
@@ -1657,13 +1644,6 @@ textarea.input {
 }
 .time-chip input::-webkit-calendar-picker-indicator {
   display: none;
-}
-.due-info {
-  margin: 12px 0;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--ok-soft);
-  color: var(--ok);
 }
 
 @media (max-width: 960px) {

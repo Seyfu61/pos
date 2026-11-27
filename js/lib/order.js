@@ -311,3 +311,14 @@ export const HALF_PRICE_MODES = {
   max: 'teurere Hälfte',
   avg: 'Durchschnitt (auf 10 Cent aufgerundet)',
 };
+
+// --- Abschluss -----------------------------------------------------------------------------
+
+/** Was vor dem Abschluss fehlt oder auffällt (leer = alles in Ordnung). */
+export function checkoutProblems(cart, totals, now = new Date()) {
+  const problems = [];
+  if (cart.type === 'delivery' && !cart.customer?.street) problems.push('Es ist keine Lieferadresse ausgewählt.');
+  if (cart.type === 'delivery' && totals.deliveryFee === 0) problems.push('Es sind keine Lieferkosten berechnet.');
+  if (cart.dueTime && timeToday(cart.dueTime, now) < now) problems.push(`Die Uhrzeit ${cart.dueTime} Uhr ist schon vorbei.`);
+  return problems;
+}

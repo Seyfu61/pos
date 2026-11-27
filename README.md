@@ -10,7 +10,8 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt und ohne Server – alle Daten lie
   Notiz für die Küche, Lieferung oder Abholung, Lieferkosten (1,80 / 2,50 / 3,50 € oder freier Betrag –
   **automatisch nach Ort des Kunden** über die Liefergebiete in Einstellungen › Bestellung, sonst wie bei seiner letzten
   Lieferung),
-  Bar- oder Kartenzahlung.
+  „Abschließen“ schließt sofort ab (bar) und druckt die Bons nach den Druckereinstellungen – eine Rückfrage kommt nur,
+  wenn Lieferadresse oder Lieferkosten fehlen oder die Vorbestell-Uhrzeit schon vorbei ist.
 - **Pizza halb/halb**: im Pizza-Dialog „½ Pizza halbieren“ und die zweite Hälfte wählen (Suche nach Nr. oder Name).
   Preis: teurere Hälfte oder Durchschnitt (Einstellungen › Bestellung). Auf dem Küchenbon stehen beide Hälften groß.
 - **Eingabe**: Such-/Nummernfeld wird nach jedem Artikel geleert; nach jeder Bestellung startet die Kasse wieder bei der

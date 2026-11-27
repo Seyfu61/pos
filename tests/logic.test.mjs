@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { compareNr, eur, fold, normPhone, parseEur } from '../js/lib/util.js';
-import { ORDER_TYPES, canHalve, halfPrice, priceForSize, fmtMinutes, isOpenOrder, nextStage, orderDue, timeToday, autoDeliveryFee, zoneFee, categoryStation, daySummary, defaultSelection, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, orderTotals, sameLine, selectionEntries } from '../js/lib/order.js';
+import { ORDER_TYPES, checkoutProblems, canHalve, halfPrice, priceForSize, fmtMinutes, isOpenOrder, nextStage, orderDue, timeToday, autoDeliveryFee, zoneFee, categoryStation, daySummary, defaultSelection, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, orderTotals, sameLine, selectionEntries } from '../js/lib/order.js';
 import { removableIngredients, sauceChoices } from '../tools/fetch-menu.mjs';
 import { MENU_SCHEMA, makeLine, migrateMenu, seedMenu } from '../js/lib/store.js';
 import { CATEGORIES, PRODUCTS } from '../js/data/menu.js';
@@ -342,6 +342,18 @@ test('Pizza halb/halb: Preis, Größe, Position', () => {
   const other = makeLine(salami, 1, { half: PRODUCTS.find((p) => p.nr === '224'), extras: l.extras, note: 'gut durch' });
   assert.ok(!sameLine({ ...l, unitPrice: 0 }, { ...other, unitPrice: 0 }));
   assert.ok(sameLine(l, { ...makeLine(salami, 1, { half: funghi, extras: l.extras, note: 'gut durch' }), key: 'x' }));
+});
+
+test('Abschluss: Rückfrage nur, wenn etwas fehlt', () => {
+  const now = new Date('2026-11-27T18:00:00');
+  const ok = { type: 'delivery', customer: { street: 'Am Markt 3' }, dueTime: '' };
+  assert.deepEqual(checkoutProblems(ok, { deliveryFee: 180 }, now), []);
+  assert.deepEqual(checkoutProblems({ ...ok, customer: null }, { deliveryFee: 180 }, now), ['Es ist keine Lieferadresse ausgewählt.']);
+  assert.deepEqual(checkoutProblems(ok, { deliveryFee: 0 }, now), ['Es sind keine Lieferkosten berechnet.']);
+  assert.deepEqual(checkoutProblems({ ...ok, dueTime: '17:30' }, { deliveryFee: 180 }, now), ['Die Uhrzeit 17:30 Uhr ist schon vorbei.']);
+  assert.deepEqual(checkoutProblems({ ...ok, dueTime: '19:30' }, { deliveryFee: 180 }, now), []);
+  // Abholung: Adresse und Lieferkosten egal
+  assert.deepEqual(checkoutProblems({ type: 'pickup', customer: null, dueTime: '' }, { deliveryFee: 0 }, now), []);
 });
 
 test('Bestellarten: nur Lieferung und Abholung', () => {

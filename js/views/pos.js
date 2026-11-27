@@ -3,7 +3,7 @@
 import { html, useEffect, useMemo, useRef, useState, Icon, Modal, MoneyInput, Segmented, Stepper, useAppState } from '../lib/ui.js';
 import * as store from '../lib/store.js';
 import { compareNr, eur, fold, uid } from '../lib/util.js';
-import { ORDER_TYPES, PAYMENTS, HALF_PRICE_MODES, canHalve, halfPrice, priceForSize, timeToday, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, selectionEntries } from '../lib/order.js';
+import { ORDER_TYPES, HALF_PRICE_MODES, checkoutProblems, canHalve, halfPrice, priceForSize, timeToday, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, selectionEntries } from '../lib/order.js';
 import { customerReceipt, halfLines, kitchenTickets } from '../print/receipt.js';
 import { printReceipts } from '../print/index.js';
 import { CustomerPicker } from './customers.js';
@@ -223,66 +223,49 @@ function CustomItem({ onClose }) {
 
 // --- Abschluss ------------------------------------------------------------------------
 
-function Checkout({ onClose }) {
-  const { cart, settings, menu } = useAppState();
-  const copies = Math.max(1, settings.printer.customerCopies ?? 1);
-  const totals = store.cartTotals();
-  const [payment, setPayment] = useState('cash');
-  const [printCustomer, setPrintCustomer] = useState(settings.printer.printCustomer);
-  const [printKitchen, setPrintKitchen] = useState(settings.printer.printKitchen);
-  const [busy, setBusy] = useState(false);
-  const hasPrinter = settings.printer.driver !== 'none';
-
-  const finish = async () => {
-    if (busy) return;
-    setBusy(true);
-    let order;
-    try {
-      order = await store.completeOrder({ payment });
-    } catch (e) {
-      console.error(e);
-      store.toast(`Bestellung konnte nicht gespeichert werden: ${e.message}`, 'error');
-      setBusy(false);
-      return;
-    }
-    onClose();
-    const jobs = [];
-    if (printKitchen) jobs.push(...kitchenTickets(order, menu.categories));
-    if (printCustomer) for (let i = 0; i < copies; i++) jobs.push(customerReceipt(order, settings));
-    try {
-      const res = await printReceipts(jobs, settings, { drawer: payment === 'cash' });
-      store.toast(`Bestellung #${order.dayNr} gespeichert${res.printed ? ' und gedruckt' : hasPrinter ? '' : ' (kein Drucker eingerichtet)'}.`, 'ok');
-      if (res.paperNearEnd) store.toast('Hinweis: Die Papierrolle ist fast leer.', 'info', 7000);
-    } catch (e) {
-      console.error(e);
-      store.toast(`Bestellung #${order.dayNr} ist gespeichert, aber: ${e.message} Unter „Bestellungen“ kann der Bon erneut gedruckt werden.`, 'error', 12000);
-    }
-  };
-
-  return html`<${Modal}
-    title="Bestellung abschließen"
-    onClose=${onClose}
-    size="sm"
-    footer=${html`<button class="btn" onClick=${onClose}>Zurück</button><span class="spacer"></span>
-      <button class="btn primary big" disabled=${busy} onClick=${finish}><${Icon} name="check" /> ${hasPrinter ? 'Abschließen & drucken' : 'Abschließen'}</button>`}
-  >
-    <div class="checkout-total"><span>${ORDER_TYPES[cart.type]} · ${totals.count} Artikel</span><strong>${eur(totals.total)}</strong></div>
-    ${cart.type === 'delivery' && !cart.customer?.street && html`<p class="warn">Achtung: Es ist noch keine Lieferadresse ausgewählt.</p>`}
-    ${cart.type === 'delivery' && totals.deliveryFee === 0 && html`<p class="warn">Hinweis: Es sind keine Lieferkosten berechnet.</p>`}
-    ${cart.dueTime && html`<p class="due-info">Vorbestellung: ${ORDER_TYPES[cart.type]} um <strong>${cart.dueTime} Uhr</strong></p>`}
-    ${cart.dueTime && timeToday(cart.dueTime) < new Date() && html`<p class="warn">Achtung: ${cart.dueTime} Uhr ist schon vorbei.</p>`}
-    <h3 class="section-title">Zahlung</h3>
-    <${Segmented} options=${Object.entries(PAYMENTS).map(([value, label]) => ({ value, label }))} value=${payment} onChange=${setPayment} />
-    <h3 class="section-title">Drucken</h3>
-    <label class="check"><input type="checkbox" checked=${printKitchen} onChange=${(e) => setPrintKitchen(e.target.checked)} /> Küchenbons (Pizza und Küche getrennt)</label>
-    <label class="check"><input type="checkbox" checked=${printCustomer} onChange=${(e) => setPrintCustomer(e.target.checked)} /> Kundenbon${copies > 1 ? ` (${copies}×)` : ''}</label>
-    ${!hasPrinter && html`<p class="muted small">Noch kein Drucker eingerichtet – die Bestellung wird gespeichert und kann später unter „Bestellungen“ gedruckt werden.</p>`}
-  <//>`;
+/**
+ * Bestellung direkt abschließen: Zahlung bar, Bons nach den Druckereinstellungen.
+ * Nur wenn etwas fehlt, kommt eine Rückfrage. Gibt false zurück, wenn nicht abgeschlossen wurde.
+ */
+async function checkout(settings, menu) {
+  const problems = checkoutProblems(store.state.cart, store.cartTotals());
+  if (problems.length && !confirm(`${problems.join('\n')}\n\nTrotzdem abschließen?`)) return false;
+  let order;
+  try {
+    order = await store.completeOrder({ payment: 'cash' });
+  } catch (e) {
+    console.error(e);
+    store.toast(`Bestellung konnte nicht gespeichert werden: ${e.message}`, 'error');
+    return false;
+  }
+  const p = settings.printer;
+  const jobs = [];
+  if (p.printKitchen) jobs.push(...kitchenTickets(order, menu.categories));
+  if (p.printCustomer) for (let i = 0; i < Math.max(1, p.customerCopies ?? 1); i++) jobs.push(customerReceipt(order, settings));
+  try {
+    const res = await printReceipts(jobs, settings, { drawer: true });
+    store.toast(`Bestellung #${order.dayNr} gespeichert${res.printed ? ' und gedruckt' : p.driver === 'none' ? ' (kein Drucker eingerichtet)' : ''}.`, 'ok');
+    if (res.paperNearEnd) store.toast('Hinweis: Die Papierrolle ist fast leer.', 'info', 7000);
+  } catch (e) {
+    console.error(e);
+    store.toast(`Bestellung #${order.dayNr} ist gespeichert, aber: ${e.message} Unter „Bestellungen“ kann der Bon erneut gedruckt werden.`, 'error', 12000);
+  }
+  return true;
 }
 
 // --- Bon (rechte Spalte) ----------------------------------------------------------------
 
-function Ticket({ onEdit, onCustomer, onCheckout }) {
+function Ticket({ onEdit, onCustomer }) {
+  const [busy, setBusy] = useState(false);
+  const finish = async () => {
+    if (busy) return; // Doppeltipp: nicht zweimal abschließen
+    setBusy(true);
+    try {
+      await checkout(store.state.settings, store.state.menu);
+    } finally {
+      setBusy(false);
+    }
+  };
   const { cart, settings } = useAppState();
   const totals = store.cartTotals();
   const listRef = useRef();
@@ -380,7 +363,9 @@ function Ticket({ onEdit, onCustomer, onCheckout }) {
         >
           <${Icon} name="trash" />
         </button>
-        <button class="btn primary big grow" disabled=${count === 0} onClick=${onCheckout}>Abschließen · ${eur(totals.total)}</button>
+        <button class="btn primary big grow" disabled=${count === 0 || busy} onClick=${finish}>
+          <${Icon} name="check" /> ${busy ? 'Wird abgeschlossen …' : `Abschließen · ${eur(totals.total)}`}
+        </button>
       </div>
     </div>
   </aside>`;
@@ -420,7 +405,7 @@ export function PosView() {
   const [catId, setCatId] = useState(null);
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState(null); // { product, line }
-  const [dialog, setDialog] = useState(null); // 'customer' | 'checkout' | 'custom'
+  const [dialog, setDialog] = useState(null); // 'customer' | 'custom'
   const searchRef = useRef();
   const productsRef = useRef();
 
@@ -533,11 +518,10 @@ export function PosView() {
       </div>
     </section>
 
-    <${Ticket} onEdit=${editLine} onCustomer=${() => setDialog('customer')} onCheckout=${() => setDialog('checkout')} />
+    <${Ticket} onEdit=${editLine} onCustomer=${() => setDialog('customer')} />
 
     ${editing && html`<${LineEditor} product=${editing.product} line=${editing.line} onClose=${() => setEditing(null)} />`}
     ${dialog === 'custom' && html`<${CustomItem} onClose=${() => setDialog(null)} />`}
-    ${dialog === 'checkout' && html`<${Checkout} onClose=${() => setDialog(null)} />`}
     ${dialog === 'customer' &&
     html`<${CustomerPicker}
       onClose=${() => setDialog(null)}
