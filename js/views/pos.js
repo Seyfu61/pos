@@ -3,8 +3,8 @@
 import { html, useEffect, useMemo, useRef, useState, Icon, Modal, MoneyInput, Segmented, Stepper, useAppState } from '../lib/ui.js';
 import * as store from '../lib/store.js';
 import { compareNr, eur, fold, uid } from '../lib/util.js';
-import { ORDER_TYPES, PAYMENTS, timeToday, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, selectionEntries } from '../lib/order.js';
-import { customerReceipt, kitchenTickets } from '../print/receipt.js';
+import { ORDER_TYPES, PAYMENTS, HALF_PRICE_MODES, canHalve, halfPrice, priceForSize, timeToday, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, selectionEntries } from '../lib/order.js';
+import { customerReceipt, halfLines, kitchenTickets } from '../print/receipt.js';
 import { printReceipts } from '../print/index.js';
 import { CustomerPicker } from './customers.js';
 
@@ -41,8 +41,23 @@ function LineEditor({ product, line, onClose }) {
     () => (cat?.extras != null ? menu.products.filter((p) => p.cat === cat.extras && p.active !== false) : []),
     [menu, cat],
   );
+  const { settings } = useAppState();
   const opts = product?.opts ?? [];
   const [variant, setVariant] = useState(line?.variantIndex ?? 0);
+  // Halb/halb: zweite Hälfte aus derselben Kategorie
+  const halvable = Boolean(product) && canHalve(cat);
+  const [halving, setHalving] = useState(Boolean(line?.halves?.length));
+  const [half, setHalf] = useState(() => (line?.halves?.[1] ? menu.products.find((p) => p.id === line.halves[1].productId) ?? null : null));
+  const [halfQuery, setHalfQuery] = useState('');
+  const sizeLabel = product?.v?.[variant]?.[0] ?? '';
+  const halfOptions = useMemo(() => {
+    if (!halvable || !halving) return [];
+    const q = fold(halfQuery.trim());
+    return menu.products
+      .filter((p) => p.cat === product.cat && p.id !== product.id && p.active !== false && priceForSize(p, sizeLabel, variant) != null)
+      .filter((p) => !q || fold(p.nr).startsWith(q) || fold(p.name).includes(q))
+      .sort((a, b) => compareNr(a.nr, b.nr));
+  }, [menu, product, halvable, halving, halfQuery, sizeLabel, variant]);
   const [qty, setQty] = useState(line?.qty ?? 1);
   const [note, setNote] = useState(line?.note ?? '');
   // Auswahl je Gruppe (Pommes, Ohne, Sauce …)
@@ -57,9 +72,11 @@ function LineEditor({ product, line, onClose }) {
     // Angaben, die es in der Speisekarte nicht mehr gibt, bleiben an der Position erhalten.
     ...(line?.extras ?? []).filter((e) => (e.group ? !opts.some((g) => g.name === e.group) : chosen.has(e.name) && !extrasList.some((x) => x.name === e.name))),
   ];
-  const base = product ? (product.v[variant] ?? product.v[0])[1] : line.unitPrice;
+  const ownPrice = product ? (product.v[variant] ?? product.v[0])[1] : line.unitPrice;
+  const halfOther = halving && half ? priceForSize(half, sizeLabel, variant) : null;
+  const base = halfOther != null ? halfPrice(ownPrice, halfOther, settings.order.halfPrice) : ownPrice;
   const total = (base + extras.reduce((s, e) => s + e.price, 0)) * qty;
-  const missing = missingSelection(opts, sel);
+  const missing = [...missingSelection(opts, sel), ...(halving && !half ? ['zweite Hälfte'] : [])];
 
   const toggle = (name) => {
     const next = new Set(chosen);
@@ -75,11 +92,13 @@ function LineEditor({ product, line, onClose }) {
 
   const save = () => {
     if (missing.length) return;
+    const halfProduct = halving ? half : null;
     if (line) {
-      const patch = product ? store.makeLine(product, variant, { qty, extras, note }) : { qty, extras, note: note.trim() };
-      store.updateLine(line.key, { ...patch, key: line.key });
+      const patch = product ? store.makeLine(product, variant, { qty, extras, note, half: halfProduct }) : { qty, extras, note: note.trim() };
+      // Ohne Halbieren: Felder der halb/halb-Position zurücksetzen
+      store.updateLine(line.key, { halves: undefined, ...patch, key: line.key });
     } else {
-      store.addLine(store.makeLine(product, variant, { qty, extras, note }));
+      store.addLine(store.makeLine(product, variant, { qty, extras, note, half: halfProduct }));
     }
     onClose();
   };
@@ -88,7 +107,7 @@ function LineEditor({ product, line, onClose }) {
   return html`<${Modal}
     title=${title}
     onClose=${onClose}
-    size=${extrasList.length > 8 ? 'lg' : 'md'}
+    size=${extrasList.length > 8 || halving ? 'lg' : 'md'}
     footer=${html`
       ${line &&
       html`<button
@@ -118,6 +137,31 @@ function LineEditor({ product, line, onClose }) {
           </button>`,
       )}
     </div>`}
+    ${halvable &&
+    html`<div class="half-box ${halving ? 'on' : ''}">
+      <button class="btn ${halving ? 'on' : ''}" aria-pressed=${halving} onClick=${() => setHalving(!halving)}>½ Pizza halbieren</button>
+      ${halving &&
+      html`<div class="half-summary">
+        <span>½ ${product.nr} ${product.name} <span class="muted">${eur(ownPrice)}</span></span>
+        <span>+ ${half ? html`½ ${half.nr} ${half.name} <span class="muted">${eur(halfOther)}</span>` : html`<em>zweite Hälfte wählen</em>`}</span>
+        ${half && html`<strong>= ${eur(base)} <span class="muted small">(${HALF_PRICE_MODES[settings.order.halfPrice] ?? HALF_PRICE_MODES.max})</span></strong>`}
+      </div>`}
+    </div>`}
+    ${halving &&
+    html`<h3 class="section-title">Zweite Hälfte (${sizeLabel})</h3>
+      <div class="search half-search">
+        <${Icon} name="search" />
+        <input type="search" autocomplete="off" autocorrect="off" spellcheck=${false} placeholder="Nr. oder Name der zweiten Hälfte" value=${halfQuery} onInput=${(e) => setHalfQuery(e.target.value)} />
+      </div>
+      <div class="half-grid">
+        ${halfOptions.map(
+          (p) =>
+            html`<button class="half-opt ${half?.id === p.id ? 'on' : ''}" aria-pressed=${half?.id === p.id} onClick=${() => setHalf(p)}>
+              <span class="nr">${p.nr}</span><span class="half-name">${p.name}</span><span class="extra-price">${eur(priceForSize(p, sizeLabel, variant), { symbol: false })}</span>
+            </button>`,
+        )}
+        ${halfOptions.length === 0 && html`<p class="muted">Keine passende Pizza gefunden.</p>`}
+      </div>`}
     ${opts.map(
       (g) =>
         html`<h3 class="section-title">${g.type === 'many' ? `${g.name} – Zutaten weglassen` : g.name}${g.required ? html` <span class="req">Pflicht</span>` : ''}</h3>
@@ -286,6 +330,7 @@ function Ticket({ onEdit, onCustomer, onCheckout }) {
             </div>
             <button class="line-main" onClick=${() => onEdit(l)}>
               <span class="line-title">${l.nr && html`<span class="nr">${l.nr}</span>`} ${l.name} ${l.variant && html`<span class="line-variant">${l.variant}</span>`}</span>
+              ${l.halves?.length > 0 && html`<span class="line-halves">${halfLines(l).join(' + ')}</span>`}
               ${l.extras.length > 0 && html`<span class="line-extras">${l.extras.map(extraLabel).join(', ')}</span>`}
               ${l.note && html`<span class="line-note">» ${l.note}</span>`}
             </button>
@@ -371,12 +416,28 @@ function Numpad({ value, letters, target, count, onChange, onEnter }) {
 }
 
 export function PosView() {
-  const { menu, settings } = useAppState();
+  const { menu, settings, cart } = useAppState();
   const [catId, setCatId] = useState(null);
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState(null); // { product, line }
   const [dialog, setDialog] = useState(null); // 'customer' | 'checkout' | 'custom'
   const searchRef = useRef();
+  const productsRef = useRef();
+
+  // Eingabe leeren: nach jedem Artikel, der auf den Bon kommt, und nach jeder Bestellung (Bon wieder leer) –
+  // dann auch zurück zur ersten Kategorie und an den Anfang der Liste.
+  const itemCount = cart.lines.reduce((n, l) => n + l.qty, 0);
+  const prevCount = useRef(itemCount);
+  useEffect(() => {
+    const before = prevCount.current;
+    prevCount.current = itemCount;
+    if (itemCount > before) setQuery('');
+    else if (itemCount === 0 && before > 0) {
+      setQuery('');
+      setCatId(null);
+      if (productsRef.current) productsRef.current.scrollTop = 0;
+    }
+  }, [itemCount]);
 
   const cats = menu.categories;
   // Reine Extras-Kategorien teilen sich einen Reiter – das spart Platz in der Leiste.
@@ -457,7 +518,7 @@ export function PosView() {
         html`<button class="cat plain extras-cat ${!q && showExtras ? 'on' : ''}" onClick=${() => (setCatId(EXTRAS_TAB), setQuery(''))}>Extras</button>`}
       </nav>
       <div class="pos-body">
-      <div class="products">
+      <div class="products" ref=${productsRef}>
         ${products.length === 0 && html`<div class="empty"><p>${q ? `Kein Artikel für „${query}“ gefunden.` : 'In dieser Kategorie gibt es keine Artikel.'}</p></div>`}
         ${products.map(
           (p) =>

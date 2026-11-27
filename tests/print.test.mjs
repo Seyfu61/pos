@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildRequest, bytesToBase64, drawerRequest, endpointUrl, envelope, packMono, parseResponse, paperNearEnd, statusMessages } from '../js/print/webprnt.js';
-import { customerReceipt, dayReport, kitchenTickets, mapsUrl, testPage } from '../js/print/receipt.js';
+import { customerReceipt, dayReport, kitchenTickets, lineTitle, mapsUrl, testPage } from '../js/print/receipt.js';
 import { monoToPng, parseJob } from '../tools/mock-printer.mjs';
 import { mergeSettings } from '../js/data/defaults.js';
 import { categoryStation, daySummary, lineStation } from '../js/lib/order.js';
@@ -198,6 +198,23 @@ test('Vorbestellung: Uhrzeit groß auf Küchenbons und auf dem Kundenbon', () =>
   // ohne Vorbestellung keine Zeile
   assert.ok(!texts(kitchenTickets(order)[0]).some((x) => /VORBESTELLT/.test(x)));
   assert.ok(!texts(customerReceipt(order, mergeSettings())).some((x) => / um \d/.test(x)));
+});
+
+test('Halb/halb auf Küchen- und Kundenbon', () => {
+  const half = {
+    nr: '', name: 'Pizza halb/halb', variant: '40cm', unitPrice: 1990, qty: 1, tax: 7, station: 'pizza', note: '',
+    halves: [{ productId: 1, nr: '223', name: 'Pizza Salami' }, { productId: 2, nr: '222', name: 'Pizza Funghi' }],
+    extras: [{ name: 'Käserand', price: 250 }],
+  };
+  assert.equal(lineTitle(half), '½ 223 Pizza Salami + ½ 222 Pizza Funghi 40cm');
+  const o = { ...order, lines: [half, order.lines[1]] };
+  const [pizza, kitchen] = kitchenTickets(o);
+  const p = texts(pizza);
+  assert.ok(p.includes('1x HALB/HALB 40cm') && p.includes('½ 223 Pizza Salami') && p.includes('½ 222 Pizza Funghi') && p.includes('+ Käserand'));
+  assert.equal(pizza.find((b) => b.text === '½ 222 Pizza Funghi').size, 'l');
+  assert.ok(texts(kitchen).includes('1x ½ 223 Pizza Salami + ½ 222 Pizza Funghi 40cm'), 'andere Seite: einzeilig');
+  const c = texts(customerReceipt(o, mergeSettings()));
+  assert.ok(c.includes('1x Pizza halb/halb 40cm') && c.includes('19,90') && c.includes('½ 223 Pizza Salami') && c.includes('½ 222 Pizza Funghi'));
 });
 
 test('Küchenbons: nur Getränke -> kein Küchenbon', () => {

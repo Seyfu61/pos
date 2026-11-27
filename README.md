@@ -11,6 +11,10 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt und ohne Server – alle Daten lie
   **automatisch nach Ort des Kunden** über die Liefergebiete in Einstellungen › Bestellung, sonst wie bei seiner letzten
   Lieferung),
   Bar- oder Kartenzahlung.
+- **Pizza halb/halb**: im Pizza-Dialog „½ Pizza halbieren“ und die zweite Hälfte wählen (Suche nach Nr. oder Name).
+  Preis: teurere Hälfte oder Durchschnitt (Einstellungen › Bestellung). Auf dem Küchenbon stehen beide Hälften groß.
+- **Eingabe**: Such-/Nummernfeld wird nach jedem Artikel geleert; nach jeder Bestellung startet die Kasse wieder bei der
+  ersten Kategorie.
 - **Auswahl beim Bestellen**: Burger – Twister Pommes (Standard) oder normale Pommes und jede Zutat abwählbar
   („ohne Zwiebeln“); Gyros – Twister Pommes für 1,50 € Aufpreis; Nuggets und Wings – Sauce (Pflicht); Salate – Dressing (Pflicht).
   Die Auswahl steht auf Küchen- und Kundenbon. Festgelegt in `tools/fetch-menu.mjs` (`OPTION_RULES`).

@@ -107,7 +107,7 @@ export function lineTotal(line) {
 /** Zwei Positionen sind zusammenfassbar, wenn Artikel, Größe, Extras und Notiz gleich sind. */
 export function sameLine(a, b) {
   const sig = (l) =>
-    JSON.stringify([l.productId, l.name, l.variant, l.unitPrice, l.tax, (l.extras ?? []).map((e) => [e.name, e.price, e.prefix ?? '']), l.note ?? '']);
+    JSON.stringify([l.productId, l.name, l.variant, l.unitPrice, l.tax, (l.halves ?? []).map((h) => h.productId), (l.extras ?? []).map((e) => [e.name, e.price, e.prefix ?? '']), l.note ?? '']);
   return sig(a) === sig(b);
 }
 
@@ -283,3 +283,31 @@ export function fmtMinutes(min) {
   if (m < 60) return `${m} Min.`;
   return `${Math.floor(m / 60)} Std.${m % 60 ? ` ${m % 60} Min.` : ''}`;
 }
+
+// --- Halb/halb ----------------------------------------------------------------------------
+
+/** Lassen sich die Artikel dieser Kategorie halbieren? (Pizza – über das Feld "halves" auch für andere einstellbar) */
+export function canHalve(cat) {
+  return cat?.halves ?? /^pizza$/i.test(cat?.name ?? '');
+}
+
+/** Preis eines Artikels in der Größe mit dieser Bezeichnung ("40cm"), sonst an gleicher Stelle. null = gibt es nicht. */
+export function priceForSize(product, label, index = 0) {
+  const byLabel = product?.v?.find(([l]) => l === label);
+  if (byLabel) return byLabel[1];
+  return product?.v?.[index]?.[1] ?? null;
+}
+
+/**
+ * Preis einer halb/halb-Pizza.
+ * 'max': Preis der teureren Hälfte · 'avg': Durchschnitt beider Hälften, auf 10 Cent aufgerundet
+ */
+export function halfPrice(a, b, mode = 'max') {
+  if (mode === 'avg') return Math.ceil((a + b) / 2 / 10) * 10;
+  return Math.max(a, b);
+}
+
+export const HALF_PRICE_MODES = {
+  max: 'teurere Hälfte',
+  avg: 'Durchschnitt (auf 10 Cent aufgerundet)',
+};

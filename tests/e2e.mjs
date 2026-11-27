@@ -360,6 +360,47 @@ try {
   for (const name of ['Gyros', 'Nuggets', 'Bauernsalat', 'Joghurt groß', 'Joghurt klein']) await page.locator('.line', { hasText: name }).locator('.qty-btn').first().click();
   assert.equal(await page.locator('.line').count(), 0);
 
+  // Leerer Bon -> zurück auf die erste Kategorie
+  await page.locator('.cat.on', { hasText: /^Pizza$/ }).waitFor({ timeout: 3000 });
+
+  // Eingabe wird nach dem Artikel geleert (auch wenn die Karte statt "Hinzufügen" angetippt wird)
+  const nk = (ch) => page.locator('.numpad .numkey', { hasText: new RegExp(`^${ch}$`) }).click();
+  for (const ch of ['2', '2']) await nk(ch);
+  await page.locator('.product', { hasText: 'Pizza Salami' }).click();
+  await page.locator('.modal-foot .btn.primary').click();
+  await page.locator('.line', { hasText: 'Pizza Salami' }).waitFor();
+  await page.waitForFunction(() => document.querySelector('.search input').value === '', null, { timeout: 3000 }); // Eingabe nach dem Artikel leer
+  assert.match(await page.locator('.numpad-display').innerText(), /Artikel-Nr\./);
+  await page.locator('.line', { hasText: 'Pizza Salami' }).locator('.qty-btn').first().click();
+
+  // Pizza halb/halb: 223 Salami + 222 Funghi in 40cm -> Preis der teureren Hälfte (19,90)
+  for (const ch of ['2', '2', '3']) await nk(ch);
+  await page.locator('.numpad .btn.primary').click();
+  await page.locator('.variant', { hasText: '40cm' }).first().click();
+  await page.getByRole('button', { name: '½ Pizza halbieren' }).click();
+  assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /Bitte zweite Hälfte wählen/);
+  assert.ok(await page.locator('.modal-foot .btn.primary').isDisabled());
+  assert.ok(!(await page.locator('.half-opt').allInnerTexts()).some((t) => /Pizza Salami/.test(t)), 'nicht dieselbe Pizza');
+  await page.locator('.half-search input').fill('222');
+  assert.equal(await page.locator('.half-opt').count(), 1);
+  await page.locator('.half-opt', { hasText: 'Pizza Funghi' }).click();
+  assert.match(await page.locator('.half-summary').innerText(), /½ 223 Pizza Salami[\s\S]*½ 222 Pizza Funghi[\s\S]*= 19,90 €[\s\S]*teurere Hälfte/);
+  await page.locator('.extra', { hasText: 'Käserand' }).click();
+  await shot('halb-halb');
+  assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /22,40/); // 19,90 + 2,50
+  await page.locator('.modal-foot .btn.primary').click();
+  const halfLine = page.locator('.line', { hasText: 'halb/halb' });
+  assert.match(await halfLine.innerText(), /Pizza halb\/halb[\s\S]*40cm[\s\S]*½ 223 Pizza Salami \+ ½ 222 Pizza Funghi[\s\S]*Käserand[\s\S]*22,40/);
+  // Bearbeiten zeigt halb/halb wieder; Halbieren aufheben -> normale Salami
+  await halfLine.locator('.line-main').click();
+  assert.equal(await page.locator('.half-opt.on').innerText().then((t) => /Pizza Funghi/.test(t)), true);
+  await page.getByRole('button', { name: '½ Pizza halbieren' }).click();
+  await page.locator('.modal-foot .btn.primary').click();
+  assert.match(await page.locator('.ticket-lines .line').innerText(), /223[\s\S]*Pizza Salami[\s\S]*40cm[\s\S]*22,40/);
+  assert.equal(await page.locator('.line', { hasText: 'halb/halb' }).count(), 0);
+  await page.locator('.ticket-lines .line .qty-btn').first().click();
+  assert.equal(await page.locator('.line').count(), 0);
+
   // Position bearbeiten (Extras für Burger), freier Artikel
   await page.locator('.cat', { hasText: 'XXL Burger' }).click();
   await page.locator('.product', { hasText: 'Baconburger' }).click();
@@ -392,6 +433,8 @@ try {
   await page.locator('.segmented button', { hasText: 'Karte' }).click();
   await page.getByRole('button', { name: 'Abschließen', exact: true }).click();
   await toast('kein Drucker eingerichtet');
+  await page.locator('.cat.on', { hasText: /^Pizza$/ }).waitFor({ timeout: 3000 }); // nach der Bestellung zurück auf die erste Kategorie
+  assert.equal(await page.getByPlaceholder('Artikel-Nr. oder Name').inputValue(), '');
   assert.equal(await page.locator('.chip', { hasText: 'Sofort' }).getAttribute('class').then((c) => c.includes('on')), true, 'neue Bestellung wieder "Sofort"');
   assert.equal(await page.locator('.rail-badge').innerText(), '1');
   await nav('Offen');

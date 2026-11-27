@@ -5,7 +5,7 @@ import * as store from '../lib/store.js';
 import { APP_VERSION } from '../version.js';
 import { forceUpdate } from '../lib/update.js';
 import { compareNr, dayKey, eur, fmtDayKey, parseEur } from '../lib/util.js';
-import { ORDER_TYPES, STATION_SIDES, categoryStation } from '../lib/order.js';
+import { HALF_PRICE_MODES, ORDER_TYPES, STATION_SIDES, categoryStation } from '../lib/order.js';
 import { DRIVERS, openDrawer, printReceipts, renderReceipt } from '../print/index.js';
 import { endpointUrl } from '../print/webprnt.js';
 import { paperDots } from '../print/raster.js';
@@ -171,6 +171,9 @@ function OrderTab() {
         <input type="number" inputmode="numeric" min="0" max="60" class="input" value=${o.soonMinutes}
           onChange=${(e) => e.target.value !== '' && +e.target.value >= 0 && set({ soonMinutes: Math.round(+e.target.value) })} />
       </label>
+      <div class="field wide"><span class="field-label">Preis bei Pizza halb/halb</span>
+        <${Segmented} options=${Object.entries(HALF_PRICE_MODES).map(([value, label]) => ({ value, label }))} value=${o.halfPrice ?? 'max'} onChange=${(halfPrice) => set({ halfPrice })} />
+      </div>
       <div class="field"><span class="field-label">MwSt. auf Lieferkosten</span>
         <${Segmented} options=${[{ value: 7, label: '7 %' }, { value: 19, label: '19 %' }]} value=${o.deliveryTax} onChange=${(deliveryTax) => set({ deliveryTax })} />
       </div>

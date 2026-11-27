@@ -27,9 +27,16 @@ export function mapsUrl(customer) {
   return `https://www.google.com/maps/dir/?${new URLSearchParams({ api: '1', destination: address })}`;
 }
 
+const halfTitle = (h) => `½ ${[h.nr, h.name].filter(Boolean).join(' ')}`;
+
+/** Einzeilige Bezeichnung einer Position, bei halb/halb: "½ 223 Pizza Salami + ½ 222 Pizza Funghi 40cm". */
 export function lineTitle(line) {
+  if (line.halves?.length) return [line.halves.map(halfTitle).join(' + '), line.variant].filter(Boolean).join(' ');
   return [line.nr, line.name, line.variant].filter(Boolean).join(' ');
 }
+
+/** Die beiden Hälften als eigene Zeilen (für Küchen- und Kundenbon). */
+export const halfLines = (line) => (line.halves ?? []).map(halfTitle);
 
 function header(b, shop) {
   if (shop.name) b.push(text(shop.name, { align: 'center', size: 'xl', bold: true }));
@@ -81,7 +88,9 @@ export function customerReceipt(order, settings) {
   b.push(rule());
 
   for (const l of order.lines) {
-    b.push(row(`${l.qty}x ${lineTitle(l)}`, eur(l.unitPrice * l.qty, { symbol: false }), { bold: true }));
+    const head = l.halves?.length ? [l.name, l.variant].filter(Boolean).join(' ') : lineTitle(l);
+    b.push(row(`${l.qty}x ${head}`, eur(l.unitPrice * l.qty, { symbol: false }), { bold: true }));
+    for (const h of halfLines(l)) b.push(text(h, { indent: 28 }));
     for (const e of l.extras ?? []) b.push(row(extraLabel(e), e.price ? eur(e.price * l.qty, { symbol: false }) : '', { indent: 28 }));
     if (l.note) b.push(text(`» ${l.note}`, { indent: 28 }));
   }
@@ -129,7 +138,10 @@ export function kitchenTickets(order, categories = []) {
     b.push(rule());
     lines.forEach((l, i) => {
       if (i) b.push(rule({ dashed: true }));
-      b.push(text(`${l.qty}x ${lineTitle(l)}`, { bold: true, size: 'l' }));
+      if (l.halves?.length) {
+        b.push(text(`${l.qty}x HALB/HALB ${l.variant ?? ''}`.trim(), { bold: true, size: 'l' }));
+        for (const h of halfLines(l)) b.push(text(h, { bold: true, size: 'l', indent: 28 }));
+      } else b.push(text(`${l.qty}x ${lineTitle(l)}`, { bold: true, size: 'l' }));
       for (const e of l.extras ?? []) b.push(text(extraLabel(e), { size: 'l', indent: 28, bold: e.prefix === 'ohne' }));
       if (l.note) b.push(text(`» ${l.note}`, { size: 'l', bold: true, indent: 28 }));
     });

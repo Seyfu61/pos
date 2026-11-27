@@ -41,6 +41,7 @@ export const DEFAULT_SETTINGS = {
     // Zielzeit bis die Bestellung raus ist (Minuten ab Eingang), "bald fällig" ab so vielen Minuten vorher
     prepMinutes: { delivery: 45, pickup: 20 },
     soonMinutes: 10,
+    halfPrice: 'max', // Preis bei halb/halb: 'max' = teurere Hälfte, 'avg' = Durchschnitt
   },
 };
 

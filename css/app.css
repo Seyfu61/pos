@@ -1004,6 +1004,72 @@ textarea.input {
   text-decoration: line-through;
   text-decoration-thickness: 2px;
 }
+.half-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.half-box.on {
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+}
+.half-summary {
+  display: grid;
+  gap: 1px;
+  line-height: 1.3;
+}
+.half-summary strong {
+  font-size: 18px;
+}
+.half-summary em {
+  color: var(--accent-dark);
+  font-weight: 600;
+  font-style: normal;
+}
+.half-search {
+  margin-bottom: 8px;
+}
+.half-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 7px;
+  max-height: 290px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px;
+}
+.half-opt {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: left;
+  font-weight: 500;
+  line-height: 1.2;
+}
+.half-opt.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.half-opt.on .extra-price {
+  color: #fff;
+}
+.half-name {
+  overflow-wrap: anywhere;
+}
+.line-halves {
+  font-size: 13.5px;
+  font-weight: 600;
+}
 .section-title .req {
   margin-left: 6px;
   padding: 1px 7px;

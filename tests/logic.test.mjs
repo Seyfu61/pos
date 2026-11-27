@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { compareNr, eur, fold, normPhone, parseEur } from '../js/lib/util.js';
-import { ORDER_TYPES, fmtMinutes, isOpenOrder, nextStage, orderDue, timeToday, autoDeliveryFee, zoneFee, categoryStation, daySummary, defaultSelection, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, orderTotals, sameLine, selectionEntries } from '../js/lib/order.js';
+import { ORDER_TYPES, canHalve, halfPrice, priceForSize, fmtMinutes, isOpenOrder, nextStage, orderDue, timeToday, autoDeliveryFee, zoneFee, categoryStation, daySummary, defaultSelection, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, orderTotals, sameLine, selectionEntries } from '../js/lib/order.js';
 import { removableIngredients, sauceChoices } from '../tools/fetch-menu.mjs';
-import { MENU_SCHEMA, migrateMenu, seedMenu } from '../js/lib/store.js';
+import { MENU_SCHEMA, makeLine, migrateMenu, seedMenu } from '../js/lib/store.js';
 import { CATEGORIES, PRODUCTS } from '../js/data/menu.js';
 import { mergeSettings } from '../js/data/defaults.js';
 
@@ -313,6 +313,35 @@ test('Offene Bestellungen: Ablauf, Uhrzeit, Anzeige', () => {
   assert.equal(timeToday('', now), null);
   assert.equal(timeToday('25:00', now), null);
   assert.deepEqual([5, 59, 60, 75, 120, -12].map(fmtMinutes), ['5 Min.', '59 Min.', '1 Std.', '1 Std. 15 Min.', '2 Std.', '12 Min.']);
+});
+
+test('Pizza halb/halb: Preis, Größe, Position', () => {
+  assert.equal(halfPrice(1070, 1050), 1070, 'teurere Hälfte');
+  assert.equal(halfPrice(1070, 1140, 'max'), 1140);
+  assert.equal(halfPrice(1070, 1140, 'avg'), 1110, 'Durchschnitt 11,05 -> 11,10');
+  assert.equal(halfPrice(1000, 1200, 'avg'), 1100);
+  const salami = PRODUCTS.find((p) => p.nr === '223');
+  const funghi = PRODUCTS.find((p) => p.nr === '222');
+  assert.equal(priceForSize(funghi, '40cm'), 1950);
+  assert.equal(priceForSize(funghi, 'gibtsnicht', 2), 3090, 'sonst gleiche Stelle');
+  assert.equal(priceForSize({ v: [['', 500]] }, '40cm', 1), null);
+  assert.ok(canHalve({ name: 'Pizza' }));
+  assert.ok(!canHalve({ name: 'Calzone' }) && !canHalve({ name: 'Pizzabrötchen' }) && !canHalve(undefined));
+  assert.ok(canHalve({ name: 'Calzone', halves: true }), 'per Kategorie einstellbar');
+
+  const l = makeLine(salami, 1, { half: funghi, extras: [{ name: 'Käserand', price: 250 }], note: 'gut durch' });
+  assert.deepEqual(
+    [l.name, l.nr, l.variant, l.unitPrice, l.productId, l.halves, l.extras.length, l.note],
+    ['Pizza halb/halb', '', '40cm', 1990, salami.id, [{ productId: salami.id, nr: '223', name: 'Pizza Salami' }, { productId: funghi.id, nr: '222', name: 'Pizza Funghi' }], 1, 'gut durch'],
+  );
+  assert.equal(lineTotal(l), 2240);
+  // ohne zweite Hälfte: normale Position
+  assert.equal(makeLine(salami, 1).halves, undefined);
+  // halb/halb ist eine andere Position als eine normale Salami bzw. eine andere Kombination
+  assert.ok(!sameLine(l, makeLine(salami, 1, { extras: l.extras, note: 'gut durch' })));
+  const other = makeLine(salami, 1, { half: PRODUCTS.find((p) => p.nr === '224'), extras: l.extras, note: 'gut durch' });
+  assert.ok(!sameLine({ ...l, unitPrice: 0 }, { ...other, unitPrice: 0 }));
+  assert.ok(sameLine(l, { ...makeLine(salami, 1, { half: funghi, extras: l.extras, note: 'gut durch' }), key: 'x' }));
 });
 
 test('Bestellarten: nur Lieferung und Abholung', () => {

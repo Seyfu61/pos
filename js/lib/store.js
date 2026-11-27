@@ -3,7 +3,7 @@
 import * as db from './db.js';
 import { clone, dayKey, normPhone, uid } from './util.js';
 import { indexCustomer } from './csv.js';
-import { ORDER_TYPES, autoDeliveryFee, categoryStation, isOpenOrder, orderTotals, sameLine, timeToday } from './order.js';
+import { ORDER_TYPES, autoDeliveryFee, categoryStation, halfPrice, priceForSize, isOpenOrder, orderTotals, sameLine, timeToday } from './order.js';
 import { DEFAULT_SETTINGS, mergeSettings } from '../data/defaults.js';
 import { CATEGORIES, MENU_SOURCE, PRODUCTS } from '../data/menu.js';
 
@@ -231,9 +231,21 @@ function cartChanged() {
 }
 
 /** Position aus Artikel + gewählter Variante/Extras aufbauen. */
-export function makeLine(product, variantIndex = 0, { qty = 1, extras = [], note = '' } = {}) {
+export function makeLine(product, variantIndex = 0, { qty = 1, extras = [], note = '', half = null } = {}) {
   const cat = state.menu.categories.find((c) => c.id === product.cat);
   const [label, price] = product.v[variantIndex] ?? product.v[0];
+  if (half) {
+    // Halb/halb: Größe gilt für die ganze Pizza, Preis nach Einstellung aus beiden Hälften
+    const other = priceForSize(half, label, variantIndex) ?? price;
+    const piece = (p) => ({ productId: p.id, nr: p.nr ?? '', name: p.name });
+    return {
+      ...makeLine(product, variantIndex, { qty, extras, note }),
+      nr: '',
+      name: 'Pizza halb/halb',
+      unitPrice: halfPrice(price, other, state.settings.order.halfPrice),
+      halves: [piece(product), piece(half)],
+    };
+  }
   return {
     key: uid(),
     productId: product.id,
