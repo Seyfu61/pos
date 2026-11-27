@@ -2,7 +2,7 @@
 // Strategie "Netz zuerst": Ist das Netz da, kommt immer die aktuelle Version;
 // ohne Netz wird die zuletzt geladene Fassung aus dem Zwischenspeicher verwendet.
 
-const CACHE = 'kasse-v8';
+const CACHE = 'kasse-v9';
 const FILES = [
   './',
   'index.html',

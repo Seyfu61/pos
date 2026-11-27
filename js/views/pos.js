@@ -360,7 +360,7 @@ function Numpad({ value, letters, target, count, onChange, onEnter }) {
     <div class="numpad-keys">
       ${['7', '8', '9', '4', '5', '6', '1', '2', '3'].map(key)}
       ${letters.length === 1 ? key(letters[0]) : clear} ${key('0')}
-      <button class="numkey fn" disabled=${!value} onClick=${() => onChange(value.slice(0, -1))} aria-label="Letztes Zeichen löschen"><${Icon} name="backspace" size=${26} /></button>
+      <button class="numkey fn" disabled=${!value} onClick=${() => onChange(value.slice(0, -1))} aria-label="Letztes Zeichen löschen"><${Icon} name="backspace" size=${32} /></button>
       ${letters.length > 1 && letters.map(key)}
     </div>
     <div class="numpad-actions">
