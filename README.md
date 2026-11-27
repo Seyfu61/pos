@@ -72,6 +72,13 @@ Zeichensatz (UTF-8 oder Windows) werden erkannt. Danach wird zugeordnet, welche 
 Hausnummer, PLZ, Ort, Kundennummer und Notiz enthält; übliche Spaltennamen werden automatisch erkannt.
 Vorhandene Kunden können behalten (gleiche Telefonnummer wird aktualisiert) oder komplett ersetzt werden.
 
+## Updates
+
+Nach einer Änderung auf GitHub dauert es etwa 1–2 Minuten, bis GitHub Pages die neue Fassung ausliefert. Die Kasse sieht
+alle 5 Minuten und bei jedem Öffnen nach, ob es eine neue Version gibt, und zeigt dann unten „Eine neue Version der Kasse
+ist da – Jetzt neu laden“. Ist gerade nichts auf dem Bon, lädt sie beim Zurückkehren in die App von selbst neu.
+Welche Version läuft, steht unter Einstellungen › Daten; dort lässt sich ein Update auch von Hand erzwingen.
+
 ## Datensicherung
 
 Alle Daten liegen **nur auf diesem iPad** (im Browser-Speicher). Unter Einstellungen › Daten regelmäßig
@@ -100,7 +107,8 @@ node tools/mock-printer.mjs   # Drucker-Attrappe: speichert Bons als PNG in bons
 Ein neuer Stand der Speisekarte wird beim nächsten Start automatisch übernommen, solange in der Kasse nichts an
 Artikeln oder Kategorien geändert wurde. Andernfalls unter Einstellungen › Speisekarte „zurücksetzen“ wählen
 (eigene Änderungen gehen dabei verloren). Wird eine Datei unter `js/` hinzugefügt, gehört sie auch
-in die Liste in `sw.js`; bei Änderungen dort `CACHE` hochzählen.
+in die Liste in `sw.js`. Bei **jeder** Änderung `APP_VERSION` in `js/version.js` und `CACHE` in `sw.js`
+hochzählen (ein Test prüft, dass beide zusammenpassen) – daran erkennt das iPad das Update.
 
 | Ordner | Inhalt |
 | --- | --- |

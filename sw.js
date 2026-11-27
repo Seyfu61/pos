@@ -2,7 +2,7 @@
 // Strategie "Netz zuerst": Ist das Netz da, kommt immer die aktuelle Version;
 // ohne Netz wird die zuletzt geladene Fassung aus dem Zwischenspeicher verwendet.
 
-const CACHE = 'kasse-v11';
+const CACHE = 'kasse-v12'; // muss zu APP_VERSION in js/version.js passen
 const FILES = [
   './',
   'index.html',
@@ -11,7 +11,9 @@ const FILES = [
   'vendor/preact-htm.js',
   'vendor/uqr.js',
   'js/main.js',
+  'js/version.js',
   'js/lib/ui.js',
+  'js/lib/update.js',
   'js/lib/util.js',
   'js/lib/db.js',
   'js/lib/store.js',
@@ -38,7 +40,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((cache) => cache.addAll(FILES))
+      // cache: 'reload' – frisch vom Server holen, nicht aus dem Zwischenspeicher des Browsers
+      .then((cache) => cache.addAll(FILES.map((f) => new Request(f, { cache: 'reload' }))))
       .then(() => self.skipWaiting()),
   );
 });
@@ -56,8 +59,11 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   // Nur eigene Dateien behandeln – Druckaufträge an den Drucker gehen unverändert durch.
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  // Immer beim Server nachfragen (no-cache): GitHub Pages erlaubt dem Browser sonst, Dateien 10 Minuten
+  // zwischenzuspeichern – dann könnte das iPad alte und neue Dateien mischen. Unveränderte Dateien kosten nur eine kurze Rückfrage.
+  const fresh = req.mode === 'navigate' ? new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : new Request(req, { cache: 'no-cache' });
   event.respondWith(
-    fetch(req)
+    fetch(fresh)
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();

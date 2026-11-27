@@ -25,6 +25,21 @@ test('Offline-Liste im Service Worker ist vollständig', async () => {
   for (const f of needed) assert.ok(listed.includes(f), `fehlt in der Offline-Liste von sw.js: ${f}`);
 });
 
+test('Versionsnummer der App passt zum Offline-Speicher', async () => {
+  const sw = await readFile(path.join(root, 'sw.js'), 'utf8');
+  const { APP_VERSION } = await import('../js/version.js');
+  assert.ok(Number.isInteger(APP_VERSION));
+  assert.equal(/const CACHE = '([^']+)'/.exec(sw)?.[1], `kasse-v${APP_VERSION}`, 'bei jeder Änderung beide hochzählen');
+});
+
+test('Service Worker fragt immer beim Server nach (kein veralteter Browser-Zwischenspeicher)', async () => {
+  const sw = await readFile(path.join(root, 'sw.js'), 'utf8');
+  assert.match(sw, /cache: 'no-cache'/);
+  assert.match(sw, /cache: 'reload'/);
+  const main = await readFile(path.join(root, 'js/main.js'), 'utf8');
+  assert.match(main, /updateViaCache: 'none'/);
+});
+
 test('Jeder Import zeigt auf eine vorhandene Datei', async () => {
   for (const file of await walk('js')) {
     const src = await readFile(path.join(root, file), 'utf8');

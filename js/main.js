@@ -3,6 +3,7 @@
 import { html, render, Icon, useAppState, useNow } from './lib/ui.js';
 import { orderDue } from './lib/order.js';
 import * as store from './lib/store.js';
+import { APP_VERSION } from './version.js';
 import { PosView } from './views/pos.js';
 import { OrdersView } from './views/orders.js';
 import { OpenView } from './views/open.js';
@@ -50,6 +51,11 @@ function App() {
       )}
     </nav>
     <main class="view"><${current.component} /></main>
+    ${s.updateReady &&
+    html`<div class="update-banner" role="status">
+      <span>Eine neue Version der Kasse ist da.</span>
+      <button class="btn primary" onClick=${() => location.reload()}>Jetzt neu laden</button>
+    </div>`}
     <div class="toasts" aria-live="polite">
       ${s.toasts.map((t) => html`<div class="toast ${t.kind}" key=${t.id} onClick=${() => store.dismissToast(t.id)}>${t.message}</div>`)}
     </div>
@@ -59,10 +65,34 @@ function App() {
 render(html`<${App} />`, document.getElementById('app'));
 store.init();
 
-// Offline-Betrieb: Service Worker nur über https bzw. localhost verfügbar.
+// Offline-Betrieb und Updates: Service Worker nur über https bzw. localhost verfügbar.
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('Service Worker nicht registriert:', e));
+  let hadController = Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // Erste Installation ist kein Update; danach heißt ein neuer Service Worker: neue Version auf dem Server.
+    if (!hadController) {
+      hadController = true;
+      return;
+    }
+    store.markUpdateReady();
+  });
+  navigator.serviceWorker
+    .register('./sw.js', { updateViaCache: 'none' })
+    .then((reg) => {
+      const check = () => reg.update().catch(() => {});
+      // Als App auf dem Home-Bildschirm lädt sich die Kasse nicht von selbst neu – deshalb regelmäßig nachsehen.
+      setInterval(check, 5 * 60 * 1000);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+        check();
+        // Zurück in der App und gerade nichts in Arbeit: Update gleich übernehmen.
+        if (store.state.updateReady && !store.state.cart.lines.length && !document.querySelector('.overlay')) location.reload();
+      });
+    })
+    .catch((e) => console.warn('Service Worker nicht registriert:', e));
 }
+
+window.__kasseVersion = APP_VERSION;
 
 // iOS: Doppeltipp-Zoom und Pinch-Zoom verhindern, damit sich die Kasse wie eine App anfühlt.
 document.addEventListener('gesturestart', (e) => e.preventDefault());

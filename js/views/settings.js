@@ -2,6 +2,8 @@
 
 import { html, useMemo, useState, CanvasView, Field, Icon, Modal, MoneyInput, Segmented, TextInput, pickFile, saveFile, useAppState } from '../lib/ui.js';
 import * as store from '../lib/store.js';
+import { APP_VERSION } from '../version.js';
+import { forceUpdate } from '../lib/update.js';
 import { compareNr, dayKey, eur, fmtDayKey, parseEur } from '../lib/util.js';
 import { ORDER_TYPES, STATION_SIDES, categoryStation } from '../lib/order.js';
 import { DRIVERS, openDrawer, printReceipts, renderReceipt } from '../print/index.js';
@@ -370,6 +372,21 @@ function DataTab() {
     }
   };
   return html`<section class="card pad">
+    <div class="version-row">
+      <span>Version <strong>${APP_VERSION}</strong></span>
+      <button
+        class="btn"
+        onClick=${async () => {
+          try {
+            await forceUpdate();
+          } catch (e) {
+            store.toast(e.message, 'error');
+          }
+        }}
+      >
+        <${Icon} name="repeat" /> Nach Update suchen und neu laden
+      </button>
+    </div>
     <h2>Datensicherung</h2>
     <p>
       Alle Daten (Kunden, Bestellungen, Speisekarte, Einstellungen) liegen <strong>nur auf diesem Gerät</strong>. Bitte regelmäßig sichern –

@@ -16,6 +16,7 @@ export const state = {
   customers: [],
   cart: null,
   toasts: [],
+  updateReady: false, // neue Version der Kasse geladen, Neustart nötig
   persisted: false,
   openOrders: [], // noch nicht erledigte Bestellungen (Bereich "Offen")
 };
@@ -43,6 +44,11 @@ export function toast(message, kind = 'info', ms = kind === 'error' ? 9000 : 350
 }
 export function dismissToast(id) {
   state.toasts = state.toasts.filter((t) => t.id !== id);
+  emit();
+}
+
+export function markUpdateReady() {
+  state.updateReady = true;
   emit();
 }
 
