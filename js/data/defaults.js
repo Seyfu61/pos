@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS = {
     printCustomer: true,
     customerCopies: 2, // Anzahl Kundenbons je Bestellung
     printKitchen: true,
+    kitchenSize: 'large', // Schrift der Küchenbons: normal | large | xlarge
     mapsQr: true, // Google-Maps-QR-Code mit der Lieferadresse auf dem Kundenbon
   },
   ui: {

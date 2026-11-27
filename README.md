@@ -63,7 +63,8 @@ Einstellungen › Drucker. Der Bon wird als Bild in Druckerauflösung (576 Punkt
 | **Star WebPRNT – Netzwerk** | Kasse läuft über `http://` (Variante B); Drucker im LAN/WLAN | IP-Adresse des Druckers eintragen. Läuft die Kasse über `https://`, blockiert Safari die unverschlüsselte Verbindung – dann entweder HTTPS am Drucker aktivieren und dessen Zertifikat auf dem iPad installieren oder die App oben verwenden. |
 | **AirPrint** | Notlösung | Es erscheint jedes Mal der Druckdialog des iPads; keine Kassenschublade. |
 
-Über „Testdruck“ lässt sich die Verbindung prüfen. Die Kassenschublade (am Drucker angeschlossen) kann bei
+Über „Testdruck“ lässt sich die Verbindung prüfen. Die Schriftgröße der Küchenbons (Normal / Groß / Sehr groß, Standard
+Groß) steht ebenfalls dort, mit Vorschau und „Küchenbon testen“. Die Kassenschublade (am Drucker angeschlossen) kann bei
 Barzahlung automatisch geöffnet werden.
 
 > **Stand:** Das Druckprotokoll ist nach dem offiziellen Star-WebPRNT-SDK umgesetzt und gegen eine

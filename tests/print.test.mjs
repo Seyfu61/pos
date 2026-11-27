@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildRequest, bytesToBase64, drawerRequest, endpointUrl, envelope, packMono, parseResponse, paperNearEnd, statusMessages } from '../js/print/webprnt.js';
-import { customerReceipt, dayReport, kitchenTickets, lineTitle, mapsUrl, testPage } from '../js/print/receipt.js';
+import { KITCHEN_SIZES, customerReceipt, dayReport, kitchenTickets, lineTitle, mapsUrl, sampleOrder, testPage } from '../js/print/receipt.js';
 import { monoToPng, parseJob } from '../tools/mock-printer.mjs';
 import { mergeSettings } from '../js/data/defaults.js';
 import { categoryStation, daySummary, lineStation } from '../js/lib/order.js';
@@ -176,10 +176,10 @@ test('Küchenbons: Pizzaseite und Küchenseite getrennt, mit Hinweis auf die and
   for (const t of [pizza, kitchen]) assert.ok(!t.some((x) => /Fanta/.test(x)), 'keine Getränke');
   // Eigene Artikel groß, die der anderen Seite klein und ohne Extras/Notizen
   const size = (blocks, t) => blocks.find((b) => b.text === t)?.size;
-  assert.equal(size(tickets[0], '2x 220 Pizza Margherita 40cm'), 'l');
-  assert.equal(size(tickets[0], '1x 101 Cheesehamburger'), 's');
-  assert.equal(size(tickets[1], '2x 220 Pizza Margherita 40cm'), 's');
-  assert.equal(size(tickets[1], '1x 101 Cheesehamburger'), 'l');
+  assert.equal(size(tickets[0], '2x 220 Pizza Margherita 40cm'), 'lx');
+  assert.equal(size(tickets[0], '1x 101 Cheesehamburger'), 'm');
+  assert.equal(size(tickets[1], '2x 220 Pizza Margherita 40cm'), 'm');
+  assert.equal(size(tickets[1], '1x 101 Cheesehamburger'), 'lx');
   assert.equal(tickets[1].find((b) => b.text === 'ohne Zwiebeln')?.bold, true, '"ohne" fett');
   assert.ok(!kitchen.includes('+ Käserand') && !kitchen.includes('» ohne Zwiebeln') && !pizza.includes('+ Bacon') && !pizza.includes('mit Twister Pommes'));
   for (const t of [pizza, kitchen]) assert.ok(!t.some((x) => /\d,\d\d( €)?$/.test(x) && !/l$/.test(x)), 'keine Preise');
@@ -211,10 +211,25 @@ test('Halb/halb auf Küchen- und Kundenbon', () => {
   const [pizza, kitchen] = kitchenTickets(o);
   const p = texts(pizza);
   assert.ok(p.includes('1x HALB/HALB 40cm') && p.includes('½ 223 Pizza Salami') && p.includes('½ 222 Pizza Funghi') && p.includes('+ Käserand'));
-  assert.equal(pizza.find((b) => b.text === '½ 222 Pizza Funghi').size, 'l');
+  assert.equal(pizza.find((b) => b.text === '½ 222 Pizza Funghi').size, 'lx');
   assert.ok(texts(kitchen).includes('1x ½ 223 Pizza Salami + ½ 222 Pizza Funghi 40cm'), 'andere Seite: einzeilig');
   const c = texts(customerReceipt(o, mergeSettings()));
   assert.ok(c.includes('1x Pizza halb/halb 40cm') && c.includes('19,90') && c.includes('½ 223 Pizza Salami') && c.includes('½ 222 Pizza Funghi'));
+});
+
+test('Küchenbons: Schriftgröße einstellbar, Standard "Groß"', () => {
+  const sizeOf = (opts, pred) => kitchenTickets(order, [], opts)[0].find(pred).size;
+  const item = (b) => b.text === '2x 220 Pizza Margherita 40cm';
+  const head = (b) => b.t === 'box';
+  assert.deepEqual([sizeOf(undefined, item), sizeOf(undefined, head)], ['lx', 'xxl']);
+  assert.deepEqual([sizeOf({ size: 'normal' }, item), sizeOf({ size: 'normal' }, head)], ['l', 'xl'], 'Normal = bisherige Größe');
+  assert.deepEqual([sizeOf({ size: 'xlarge' }, item), sizeOf({ size: 'xlarge' }, head)], ['xxl', 'xxxl']);
+  assert.equal(sizeOf({ size: 'gibtsnicht' }, item), 'lx');
+  // jede Stufe nutzt nur Größen, die das Druckbild kennt
+  const known = ['s', 'm', 'l', 'lx', 'xl', 'xxl', 'xxxl'];
+  for (const z of Object.values(KITCHEN_SIZES)) for (const v of Object.values(z)) assert.ok(known.includes(v), v);
+  // Beispielbestellung für die Vorschau ergibt Pizza- und Küchenbon
+  assert.equal(kitchenTickets(sampleOrder()).length, 2);
 });
 
 test('Küchenbons: nur Getränke -> kein Küchenbon', () => {

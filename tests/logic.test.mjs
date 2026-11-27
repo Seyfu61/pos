@@ -428,6 +428,7 @@ test('Einstellungen: gespeicherte Werte überschreiben Voreinstellungen, neue Fe
   assert.equal(mergeSettings(undefined).order.defaultType, 'delivery');
   assert.deepEqual(mergeSettings(undefined).order.deliveryFees, [180, 250, 350]);
   assert.equal(mergeSettings(undefined).printer.mapsQr, true);
+  assert.equal(mergeSettings({ printer: { driver: 'webprnt' } }).printer.kitchenSize, 'large');
   assert.equal(mergeSettings(undefined).printer.customerCopies, 2);
   assert.equal(mergeSettings({ printer: { driver: 'webprnt' } }).printer.customerCopies, 2, 'auch bei schon gespeicherten Einstellungen');
   // Stände aus der ersten Version werden angeglichen, eigene Werte bleiben

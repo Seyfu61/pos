@@ -9,7 +9,7 @@ import { HALF_PRICE_MODES, ORDER_TYPES, STATION_SIDES, categoryStation } from '.
 import { DRIVERS, openDrawer, printReceipts, renderReceipt } from '../print/index.js';
 import { endpointUrl } from '../print/webprnt.js';
 import { paperDots } from '../print/raster.js';
-import { testPage } from '../print/receipt.js';
+import { KITCHEN_SIZE_LABELS, kitchenTickets, sampleOrder, testPage } from '../print/receipt.js';
 
 const TABS = [
   { value: 'shop', label: 'Betrieb' },
@@ -53,6 +53,21 @@ function PrinterTab() {
   const url = endpointUrl(p);
   const mixed = p.driver === 'webprnt' && location.protocol === 'https:' && url.startsWith('http://');
   const preview = useMemo(() => renderReceipt(testPage(settings, paperDots(p.paper)), settings), [settings]);
+  const kitchenPreview = useMemo(
+    () => kitchenTickets(sampleOrder(), [], { size: p.kitchenSize }).map((t) => renderReceipt(t, settings)),
+    [settings],
+  );
+  const testKitchen = async () => {
+    setBusy(true);
+    try {
+      const res = await printReceipts(kitchenTickets(sampleOrder(), [], { size: p.kitchenSize }), settings);
+      store.toast(res.printed ? 'Test-Küchenbons gesendet.' : 'Kein Drucker ausgewählt.', res.printed ? 'ok' : 'info');
+    } catch (e) {
+      console.error(e);
+      store.toast(e.message, 'error', 12000);
+    }
+    setBusy(false);
+  };
 
   const test = async () => {
     setBusy(true);
@@ -87,6 +102,9 @@ function PrinterTab() {
         <div class="field"><span class="field-label">Kundenbon – Anzahl je Bestellung</span>
           <${Segmented} options=${[1, 2, 3].map((n) => ({ value: n, label: `${n}×` }))} value=${p.customerCopies ?? 1} onChange=${(customerCopies) => set({ customerCopies })} />
         </div>
+        <div class="field wide"><span class="field-label">Schrift Küchenbon</span>
+          <${Segmented} options=${Object.entries(KITCHEN_SIZE_LABELS).map(([value, label]) => ({ value, label }))} value=${p.kitchenSize ?? 'large'} onChange=${(kitchenSize) => set({ kitchenSize })} />
+        </div>
         <div class="field"><span class="field-label">Papierbreite</span>
           <${Segmented} options=${[{ value: 80, label: '80 mm (mC-Print3)' }, { value: 58, label: '58 mm' }]} value=${p.paper} onChange=${(paper) => set({ paper })} />
         </div>
@@ -107,6 +125,7 @@ function PrinterTab() {
 
       <div class="btn-row">
         <button class="btn primary" disabled=${busy || p.driver === 'none'} onClick=${test}><${Icon} name="printer" /> ${busy ? 'Sende …' : 'Testdruck'}</button>
+        <button class="btn" disabled=${busy || p.driver === 'none'} onClick=${testKitchen}><${Icon} name="printer" /> Küchenbon testen</button>
         ${star && html`<button class="btn" onClick=${drawer}>Schublade öffnen</button>`}
       </div>
 
@@ -133,7 +152,10 @@ function PrinterTab() {
       </div>
     </section>
     <section class="card pad preview-card">
-      <h2>Vorschau Testdruck</h2>
+      <h2>Vorschau Küchenbons</h2>
+      <p class="muted small">Schrift „${KITCHEN_SIZE_LABELS[p.kitchenSize] ?? 'Groß'}“ – Beispielbestellung</p>
+      ${kitchenPreview.map((c) => html`<${CanvasView} canvas=${c} />`)}
+      <h2 class="top-gap">Vorschau Testdruck</h2>
       <${CanvasView} canvas=${preview} />
     </section>
   </div>`;

@@ -5,7 +5,7 @@
 import { encode as encodeQr } from '../../vendor/uqr.js';
 
 const FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
-const SIZES = { s: 21, m: 26, l: 36, xl: 48 };
+const SIZES = { s: 21, m: 26, l: 36, lx: 44, xl: 48, xxl: 56, xxxl: 64 };
 
 /** Bedruckbare Breite in Punkten (203 dpi): 80 mm -> 576, 58 mm -> 384 */
 export function paperDots(mm) {

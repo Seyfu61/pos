@@ -240,7 +240,7 @@ async function checkout(settings, menu) {
   }
   const p = settings.printer;
   const jobs = [];
-  if (p.printKitchen) jobs.push(...kitchenTickets(order, menu.categories));
+  if (p.printKitchen) jobs.push(...kitchenTickets(order, menu.categories, { size: p.kitchenSize }));
   if (p.printCustomer) for (let i = 0; i < Math.max(1, p.customerCopies ?? 1); i++) jobs.push(customerReceipt(order, settings));
   try {
     const res = await printReceipts(jobs, settings, { drawer: true });

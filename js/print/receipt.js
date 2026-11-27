@@ -118,7 +118,16 @@ export function customerReceipt(order, settings) {
  * Unter den eigenen Artikeln steht klein, was die andere Seite für dieselbe Bestellung macht,
  * damit beide Seiten sich abstimmen können. Stationen ohne Artikel bekommen keinen Bon.
  */
-export function kitchenTickets(order, categories = []) {
+// Schriftgrößen der Küchenbons je Stufe (Rollen -> Größen aus raster.js)
+export const KITCHEN_SIZES = {
+  normal: { head: 'xl', type: 'l', meta: 's', who: 'm', note: 'l', pre: 'l', item: 'l', sub: 'l', count: 'm', other: 's' },
+  large: { head: 'xxl', type: 'xl', meta: 'm', who: 'l', note: 'xl', pre: 'xl', item: 'lx', sub: 'lx', count: 'l', other: 'm' },
+  xlarge: { head: 'xxxl', type: 'xl', meta: 'm', who: 'l', note: 'xxl', pre: 'xxl', item: 'xxl', sub: 'xl', count: 'l', other: 'm' },
+};
+export const KITCHEN_SIZE_LABELS = { normal: 'Normal', large: 'Groß', xlarge: 'Sehr groß' };
+
+export function kitchenTickets(order, categories = [], { size = 'large' } = {}) {
+  const z = KITCHEN_SIZES[size] ?? KITCHEN_SIZES.large;
   const groups = Object.fromEntries(Object.keys(STATIONS).map((s) => [s, []]));
   // Positionen ohne Station (z. B. Getränke) erscheinen auf keinem Küchenbon.
   for (const l of order.lines) groups[lineStation(l, categories)]?.push(l);
@@ -128,37 +137,53 @@ export function kitchenTickets(order, categories = []) {
     const lines = groups[station];
     if (!lines.length) continue;
     const b = [];
-    b.push(box(`${STATIONS[station].toUpperCase()}  #${order.dayNr}`, { size: 'xl' }));
-    b.push(space(4), text(typeLabel(order), { align: 'center', size: 'l', bold: true }));
-    b.push(row(fmtDateTime(order.createdAt), `Bon-Nr. ${order.bonNr}`, { size: 's' }));
-    if (order.dueAt) b.push(space(4), box(`VORBESTELLT: ${fmtTime(order.dueAt)} UHR`, { size: 'l' }), space(4));
+    b.push(box(`${STATIONS[station].toUpperCase()}  #${order.dayNr}`, { size: z.head }));
+    b.push(space(4), text(typeLabel(order), { align: 'center', size: z.type, bold: true }));
+    b.push(row(fmtDateTime(order.createdAt), `Bon-Nr. ${order.bonNr}`, { size: z.meta }));
+    if (order.dueAt) b.push(space(4), box(`VORBESTELLT: ${fmtTime(order.dueAt)} UHR`, { size: z.pre }), space(4));
     const c = order.customer;
-    if (c?.name) b.push(text([c.name, order.type === 'delivery' ? c.city : ''].filter(Boolean).join(' · '), { bold: true }));
-    if (order.note) b.push(text(`» ${order.note}`, { bold: true, size: 'l' }));
+    if (c?.name) b.push(text([c.name, order.type === 'delivery' ? c.city : ''].filter(Boolean).join(' · '), { bold: true, size: z.who }));
+    if (order.note) b.push(text(`» ${order.note}`, { bold: true, size: z.note }));
     b.push(rule());
     lines.forEach((l, i) => {
       if (i) b.push(rule({ dashed: true }));
       if (l.halves?.length) {
-        b.push(text(`${l.qty}x HALB/HALB ${l.variant ?? ''}`.trim(), { bold: true, size: 'l' }));
-        for (const h of halfLines(l)) b.push(text(h, { bold: true, size: 'l', indent: 28 }));
-      } else b.push(text(`${l.qty}x ${lineTitle(l)}`, { bold: true, size: 'l' }));
-      for (const e of l.extras ?? []) b.push(text(extraLabel(e), { size: 'l', indent: 28, bold: e.prefix === 'ohne' }));
-      if (l.note) b.push(text(`» ${l.note}`, { size: 'l', bold: true, indent: 28 }));
+        b.push(text(`${l.qty}x HALB/HALB ${l.variant ?? ''}`.trim(), { bold: true, size: z.item }));
+        for (const h of halfLines(l)) b.push(text(h, { bold: true, size: z.sub, indent: 28 }));
+      } else b.push(text(`${l.qty}x ${lineTitle(l)}`, { bold: true, size: z.item }));
+      for (const e of l.extras ?? []) b.push(text(extraLabel(e), { size: z.sub, indent: 28, bold: e.prefix === 'ohne' }));
+      if (l.note) b.push(text(`» ${l.note}`, { size: z.sub, bold: true, indent: 28 }));
     });
     b.push(rule());
-    b.push(text(`${count(lines)} Artikel`, { align: 'center' }));
+    b.push(text(`${count(lines)} Artikel`, { align: 'center', size: z.count }));
     for (const other of Object.keys(STATIONS).filter((s) => s !== station)) {
       if (groups[other].length) {
-        b.push(rule({ dashed: true }), text(`Außerdem bei ${STATIONS[other].toUpperCase()}:`, { bold: true, size: 's' }));
-        for (const l of groups[other]) b.push(text(`${l.qty}x ${lineTitle(l)}`, { size: 's' }));
+        b.push(rule({ dashed: true }), text(`Außerdem bei ${STATIONS[other].toUpperCase()}:`, { bold: true, size: z.other }));
+        for (const l of groups[other]) b.push(text(`${l.qty}x ${lineTitle(l)}`, { size: z.other }));
       } else {
-        b.push(text(`Nichts bei ${STATIONS[other]}.`, { align: 'center', size: 's' }));
+        b.push(text(`Nichts bei ${STATIONS[other]}.`, { align: 'center', size: z.other }));
       }
     }
     b.push(space(8));
     tickets.push(b);
   }
   return tickets;
+}
+
+/** Beispielbestellung für die Vorschau in den Einstellungen. */
+export function sampleOrder() {
+  return {
+    bonNr: 42, dayNr: 7, createdAt: new Date().toISOString(), type: 'delivery', status: 'done',
+    customer: { name: 'Max Mustermann', street: 'Musterweg 1', zip: '37124', city: 'Obernjesa' },
+    note: 'klingeln bei Hinterhaus',
+    lines: [
+      { nr: '220', name: 'Pizza Margherita', variant: '40cm', qty: 2, station: 'pizza', extras: [{ name: 'Käserand', price: 250 }], note: 'gut durch' },
+      { nr: '', name: 'Pizza halb/halb', variant: '30cm', qty: 1, station: 'pizza', extras: [],
+        halves: [{ nr: '223', name: 'Pizza Salami' }, { nr: '222', name: 'Pizza Funghi' }] },
+      { nr: '101', name: 'Cheesehamburger', variant: '', qty: 1, station: 'kitchen', note: '',
+        extras: [{ name: 'Pommes', price: 0, group: 'Pommes', prefix: 'mit' }, { name: 'Zwiebeln', price: 0, group: 'Ohne', prefix: 'ohne' }] },
+    ],
+  };
 }
 
 /** Tagesbericht */

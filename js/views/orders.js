@@ -59,7 +59,7 @@ export function OrderDetail({ order, onClose, onChanged, setPreview }) {
       ${!cancelled && html`<button class="btn danger ghost" onClick=${cancel}><${Icon} name="x" /> Stornieren</button>`}
       <span class="spacer"></span>
       <button class="btn" onClick=${() => (store.reorder(order), onClose())}><${Icon} name="repeat" /> Erneut bestellen</button>
-      <button class="btn" onClick=${() => printOrPreview(kitchenTickets(order, menu.categories), 'Küchenbons', settings, setPreview)}><${Icon} name="printer" /> Küchenbons</button>
+      <button class="btn" onClick=${() => printOrPreview(kitchenTickets(order, menu.categories, { size: settings.printer.kitchenSize }), 'Küchenbons', settings, setPreview)}><${Icon} name="printer" /> Küchenbons</button>
       <button class="btn primary" onClick=${() => printOrPreview(customerReceipt(order, settings), 'Kundenbon', settings, setPreview)}><${Icon} name="printer" /> Kundenbon</button>
     `}
   >
