@@ -1,6 +1,6 @@
 // Automatisch erzeugt von tools/fetch-menu.mjs – nicht von Hand bearbeiten.
 // Quelle: https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice
-export const MENU_SOURCE = {"url":"https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice","fetchedAt":"2026-11-27","rev":"iec2vn"};
+export const MENU_SOURCE = {"url":"https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice","fetchedAt":"2026-11-27","rev":"1kffp01"};
 
 // tax: MwSt.-Satz in %, extras: Kategorie mit den passenden Extras, isExtras: reine Extras-Kategorie,
 // station: auf welchem Küchenbon die Artikel stehen (pizza | kitchen | none = auf keinem)
@@ -15,8 +15,7 @@ export const CATEGORIES = [
   {"id":275,"name":"Pasta Extras","tax":7,"isExtras":true,"station":"kitchen","extras":null},
   {"id":253,"name":"Chicken Nuggets und Chicken Wings","tax":7,"isExtras":false,"station":"kitchen","extras":null},
   {"id":256,"name":"Salat","tax":7,"isExtras":false,"station":"kitchen","extras":null},
-  {"id":261,"name":"Pizzabrötchen","tax":7,"isExtras":false,"station":"pizza","extras":272},
-  {"id":272,"name":"Pizzabrötchen Extra","tax":7,"isExtras":true,"station":"pizza","extras":null},
+  {"id":261,"name":"Pizzabrötchen","tax":7,"isExtras":false,"station":"pizza","extras":null},
   {"id":257,"name":"Beilagen","tax":7,"isExtras":false,"station":"kitchen","extras":null},
   {"id":276,"name":"Getränke","tax":19,"isExtras":false,"station":"none","extras":null},
 ];
@@ -175,7 +174,6 @@ export const PRODUCTS = [
   {"id":13298,"cat":261,"nr":"286","name":"Pizzabrötchen mit Champignons","desc":"","v":[["8 Stück",750]]},
   {"id":13299,"cat":261,"nr":"287","name":"Pizzabrötchen mit Salami (5) und Schinken (1,7,9)","desc":"","v":[["8 Stück",850]]},
   {"id":13300,"cat":261,"nr":"288","name":"Pizzabrötchen mit Sucuk","desc":"","v":[["8 Stück",850]]},
-  {"id":12450,"cat":272,"nr":"","name":"hausgemachtes Joghurtdressing","desc":"zu unseren Pizzabrötchen empfehlen wir unser hausgemachtes Joghurtdressing","v":[["",150]]},
   {"id":13310,"cat":257,"nr":"","name":"Twister Pommes","desc":"","v":[["klein",490],["groß",790]]},
   {"id":13311,"cat":257,"nr":"","name":"Pommes","desc":"","v":[["klein",390],["groß",590]]},
   {"id":13800,"cat":257,"nr":"","name":"Zaziki","desc":"","v":[["klein",180],["groß",300]]},

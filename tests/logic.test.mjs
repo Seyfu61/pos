@@ -36,8 +36,11 @@ test('Artikelnummern sortieren', () => {
 
 test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   const byNr = (nr) => PRODUCTS.filter((p) => p.nr === nr);
-  assert.equal(PRODUCTS.length, 165);
-  assert.equal(CATEGORIES.length, 14);
+  assert.equal(PRODUCTS.length, 164);
+  assert.ok(!PRODUCTS.some((p) => p.name === 'hausgemachtes Joghurtdressing'), 'Joghurtdressing unter Pizzabrötchen entfernt');
+  assert.ok(!CATEGORIES.some((c) => c.name === 'Pizzabrötchen Extra'), 'leere Kategorie entfällt');
+  assert.equal(CATEGORIES.find((c) => c.name === 'Pizzabrötchen').extras, null);
+  assert.equal(CATEGORIES.length, 13);
   assert.deepEqual(byNr('220')[0].v, [['30cm', 950], ['40cm', 1740], ['40x60cm', 2790]]);
   assert.equal(byNr('220')[0].name, 'Pizza Margherita');
   assert.equal(byNr('221a')[0].name, 'Pizza Andy');
@@ -65,7 +68,7 @@ test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   assert.equal(cat('XXL Burger').extras, cat('Extras Burger').id);
   assert.equal(cat('Extras Burger').extras, null);
   // Küchenbon-Station: alles rund um Pizza an die Pizzaseite, der Rest an die Küchenseite
-  assert.deepEqual(CATEGORIES.filter((c) => c.station === 'pizza').map((c) => c.name), ['Pizza', 'Extras (Pizza)', 'Calzone', 'Pizzabrötchen', 'Pizzabrötchen Extra']);
+  assert.deepEqual(CATEGORIES.filter((c) => c.station === 'pizza').map((c) => c.name), ['Pizza', 'Extras (Pizza)', 'Calzone', 'Pizzabrötchen']);
   assert.deepEqual(CATEGORIES.filter((c) => c.station === 'none').map((c) => c.name), ['Getränke'], 'Getränke auf keinem Küchenbon');
   assert.ok(CATEGORIES.every((c) => ['pizza', 'kitchen', 'none'].includes(c.station)));
 });
@@ -216,8 +219,26 @@ test('Von Hand geänderte Speisekarte bekommt die neuen Auswahlmöglichkeiten, e
   assert.equal(ids.indexOf('joghurt-klein') + 1, ids.indexOf('joghurt-gross'));
   assert.equal(m4.products.length, seed.products.length);
   // ... aber nicht, wenn der Artikel nach Stufe 4 gelöscht wurde
-  const v4 = { ...m4, products: m4.products.filter((p) => p.id !== 'joghurt-klein') };
-  assert.equal(migrateMenu(v4, seed), v4);
+  const v5 = { ...m4, products: m4.products.filter((p) => p.id !== 'joghurt-klein') };
+  assert.equal(migrateMenu(v5, seed), v5);
+
+  // Stand nach Stufe 4: Joghurtdressing (bringstar) unter "Pizzabrötchen Extra" wird entfernt, die leere Kategorie entfällt
+  const v4 = JSON.parse(JSON.stringify(seed));
+  v4.schema = 4;
+  v4.edited = true;
+  v4.categories.push({ id: 272, name: 'Pizzabrötchen Extra', tax: 7, isExtras: true, station: 'pizza', extras: null });
+  v4.categories.find((c) => c.name === 'Pizzabrötchen').extras = 272;
+  v4.products.push({ id: 12450, cat: 272, nr: '', name: 'hausgemachtes Joghurtdressing', desc: '', v: [['', 150]], active: true });
+  const m5 = migrateMenu(v4, seed);
+  assert.ok(!m5.products.some((p) => p.id === 12450));
+  assert.ok(!m5.categories.some((c) => c.id === 272));
+  assert.equal(m5.categories.find((c) => c.name === 'Pizzabrötchen').extras, null);
+  // Hat jemand weitere eigene Artikel in diese Kategorie gelegt, bleibt sie
+  const keep = JSON.parse(JSON.stringify(v4));
+  keep.products.push({ id: 'peigen2', cat: 272, nr: '', name: 'Knoblauchsauce', desc: '', v: [['', 100]], active: true });
+  const k5 = migrateMenu(keep, seed);
+  assert.ok(k5.categories.some((c) => c.id === 272) && k5.categories.find((c) => c.name === 'Pizzabrötchen').extras === 272);
+  assert.ok(!k5.products.some((p) => p.id === 12450));
 });
 
 test('Liefergebiete: Lieferkosten nach Ort des Kunden', () => {

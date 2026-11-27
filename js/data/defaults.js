@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS = {
   },
   ui: {
     numpad: true, // Nummernfeld an der Kasse einblenden
+    customerField: 'all', // Kundensuche: all | nr | name | address | phone
   },
   order: {
     defaultType: 'delivery',

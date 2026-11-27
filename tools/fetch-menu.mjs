@@ -82,6 +82,12 @@ function buildOptions(cat, item) {
   return rule ? rule.build(item).filter((g) => g.choices.length > (g.type === 'one' ? 1 : 0)) : [];
 }
 
+// Artikel von bringstar, die in der Kasse nicht vorkommen sollen (Name, exakt).
+// Kategorien, die dadurch leer werden, entfallen ebenfalls.
+const EXCLUDED_PRODUCTS = [
+  'hausgemachtes Joghurtdressing', // ersetzt durch "Joghurt klein" / "Joghurt groß" unter Beilagen
+];
+
 // Artikel, die es bei bringstar nicht gibt (feste IDs, damit Bestellungen und Änderungen zuordenbar bleiben).
 const LOCAL_PRODUCTS = [
   { id: 'joghurt-klein', cat: /^beilagen$/i, name: 'Joghurt klein', desc: 'hausgemachtes Joghurtdressing', v: [['', 150]] },
@@ -154,7 +160,8 @@ function fixLabel(s, used) {
 
 export function parseMenu(html) {
   const used = new Set();
-  const categories = [];
+  let categories = [];
+  const excluded = [];
   const byId = new Map();
   for (const m of html.matchAll(/<h[34] class="[^"]*anchor[^"]*" id="(\d+)">(.*?)<\/h[34]>/gs)) {
     const cat = { id: +m[1], name: clean(m[2]), items: [] };
@@ -193,8 +200,14 @@ export function parseMenu(html) {
     // Die Quelle listet manche Gerichte doppelt – identische Einträge nur einmal übernehmen.
     const same = (o) => JSON.stringify([o.nr, o.name, o.desc, o.v]) === JSON.stringify([nr, name, desc, variants]);
     if (cat.items.some(same)) continue;
+    if (EXCLUDED_PRODUCTS.includes(name)) {
+      excluded.push(name);
+      continue;
+    }
     cat.items.push(item);
   }
+  for (const name of EXCLUDED_PRODUCTS) if (!excluded.includes(name)) problems.push(`Ausgeschlossener Artikel "${name}" nicht gefunden`);
+  categories = categories.filter((c) => c.items.length > 0);
   for (const cat of categories) {
     cat.tax = DRINKS.test(cat.name) ? 19 : 7;
     cat.isExtras = EXTRAS_RULES.some((r) => r.extras.test(cat.name));

@@ -77,7 +77,7 @@ try {
   await toast('Import fertig: 3 neu');
   await page.locator('.customer-row', { hasText: 'Jürgen Müller' }).waitFor();
   // Tabelle: Nr. | Name | Adresse | Telefon, sortiert nach Kundennummer
-  assert.deepEqual(await page.locator('.customer-head span').allInnerTexts(), ['NR.', 'NAME', 'ADRESSE', 'TELEFON']);
+  assert.deepEqual(await page.locator('.customer-head button').allInnerTexts(), ['NR.', 'NAME', 'ADRESSE', 'TELEFON']);
   assert.deepEqual(await page.locator('.customer-row .cust-nr').allInnerTexts(), ['1001', '1002', '1003']);
   const juergen = page.locator('.customer-row', { hasText: 'Jürgen Müller' });
   assert.deepEqual(
@@ -85,6 +85,33 @@ try {
     ['1001', 'Jürgen Müller\nHinterhaus', 'Göttinger Straße 12a\n37124 Rosdorf', '05509 12345'],
   );
   assert.equal(await page.locator('.customer-row', { hasText: 'Ayse Yilmaz' }).locator('.cust-phone').innerText(), '0551/998877\n0170 1234567');
+  // Gezielt suchen: nur in einer Spalte
+  const custSearch = page.locator('.customer-search input');
+  const rowNames = () => page.locator('.customer-row .cust-name strong').allInnerTexts();
+  await custSearch.fill('1002');
+  assert.deepEqual(await rowNames(), ['Ayse Yilmaz'], 'Alle: Kundennummer');
+  await page.locator('.search-in .chip', { hasText: 'Name' }).click();
+  assert.equal(await custSearch.getAttribute('placeholder'), 'Nur Name durchsuchen');
+  assert.equal(await page.locator('.customer-row').count(), 0, '1002 kommt in keinem Namen vor');
+  await custSearch.fill('müller');
+  assert.deepEqual(await rowNames(), ['Jürgen Müller']);
+  await page.locator('.customer-head button', { hasText: 'Adresse' }).click(); // Spaltenkopf antippen
+  assert.equal(await page.locator('.search-in .chip.on').innerText(), 'Adresse');
+  assert.equal(await page.locator('.customer-row').count(), 0, 'Müller steht in keiner Adresse');
+  await custSearch.fill('friedland');
+  assert.deepEqual(await rowNames(), ['Autohaus Schröder']);
+  await page.locator('.customer-head button', { hasText: 'Nr.' }).click();
+  assert.equal(await custSearch.getAttribute('inputmode'), 'numeric', 'Zahlentastatur für Kundennummern');
+  await custSearch.fill('100');
+  assert.deepEqual(await rowNames(), ['Jürgen Müller', 'Ayse Yilmaz', 'Autohaus Schröder']);
+  await page.locator('.search-in .chip', { hasText: 'Telefon' }).click();
+  await custSearch.fill('1234567');
+  assert.deepEqual(await rowNames(), ['Ayse Yilmaz']);
+  await shot('kunden-suche');
+  // Auswahl bleibt gespeichert und gilt auch für die Kundenauswahl an der Kasse; zurück auf "Alle"
+  await page.locator('.customer-head button.on').click();
+  assert.equal(await page.locator('.search-in .chip.on').innerText(), 'Alle');
+  await custSearch.fill('');
   await shot('kunden');
 
   // --- Bestellung aufnehmen ---------------------------------------------------------------

@@ -145,31 +145,67 @@ export function customersToRows(customers) {
 /** Suchindex-Text und normalisierte Nummern einmal je Kunde vorbereiten. */
 export function indexCustomer(c) {
   c._phones = [normPhone(c.phone), normPhone(c.phone2)].filter(Boolean);
-  c._text = fold([c.name, c.street, c.zip, c.city, c.nr].filter(Boolean).join(' '));
+  c._nr = fold(c.nr);
+  c._name = fold(c.name);
+  c._addr = fold([c.street, c.zip, c.city].filter(Boolean).join(' '));
+  c._text = [c._name, c._addr, c._nr].filter(Boolean).join(' ');
   return c;
 }
 
-/** Kundensuche: Ziffern suchen in Telefon-/Kundennummer, Text in Name/Adresse. */
-export function searchCustomers(customers, query, limit = 50) {
+/** Felder, auf die sich die Kundensuche beschränken lässt. */
+export const SEARCH_FIELDS = {
+  all: { label: 'Alle', placeholder: 'Telefonnummer, Name oder Straße' },
+  nr: { label: 'Nr.', placeholder: 'Kundennummer' },
+  name: { label: 'Name', placeholder: 'Name' },
+  address: { label: 'Adresse', placeholder: 'Straße, PLZ oder Ort' },
+  phone: { label: 'Telefon', placeholder: 'Telefonnummer' },
+};
+
+/** Trefferwert für eine Telefonnummer (-1 = kein Treffer). */
+function phoneScore(c, digits) {
+  let score = -1;
+  const bare = digits.replace(/^0+/, '');
+  for (const p of c._phones) {
+    if (p === digits) score = Math.max(score, 3);
+    else if (p.endsWith(digits) || p.startsWith(digits)) score = Math.max(score, 2);
+    else if (bare.length >= 3 && p.includes(bare)) score = Math.max(score, 1);
+  }
+  return score;
+}
+
+/** Trefferwert für eine Kundennummer: exakt vor "beginnt mit" (-1 = kein Treffer). */
+function nrScore(c, q) {
+  if (!c._nr) return -1;
+  if (c._nr === q) return 3;
+  return c._nr.startsWith(q) ? 2 : -1;
+}
+
+/**
+ * Kundensuche.
+ * field 'all': Ziffern suchen in Telefon- und Kundennummer, Text in Name, Adresse und Nummer.
+ * Sonst nur im gewählten Feld: 'nr' | 'name' | 'address' | 'phone'.
+ * Die Reihenfolge der Eingabeliste bleibt bei gleich guten Treffern erhalten.
+ */
+export function searchCustomers(customers, query, limit = 50, field = 'all') {
   const q = query.trim();
   if (!q) return customers.slice(0, limit);
+  const fq = fold(q);
+  const words = fq.split(/\s+/).filter(Boolean);
   const digits = /^[\d\s+\-/()]+$/.test(q) ? normPhone(q) : '';
-  const words = fold(q).split(/\s+/).filter(Boolean);
+  const hasWords = (text) => words.every((w) => text.includes(w));
   const hits = [];
-  for (const c of customers) {
+  customers.forEach((c, i) => {
     let score = -1;
-    if (digits) {
-      const bare = digits.replace(/^0+/, '');
-      for (const p of c._phones) {
-        if (p === digits) score = Math.max(score, 3);
-        else if (p.endsWith(digits) || p.startsWith(digits)) score = Math.max(score, 2);
-        else if (bare.length >= 3 && p.includes(bare)) score = Math.max(score, 1);
-      }
-      if (c.nr && String(c.nr) === q) score = Math.max(score, 3);
+    if (field === 'nr') score = nrScore(c, fq);
+    else if (field === 'name') score = hasWords(c._name) ? 0 : -1;
+    else if (field === 'address') score = hasWords(c._addr) ? 0 : -1;
+    else if (field === 'phone') score = digits ? phoneScore(c, digits) : -1;
+    else {
+      if (digits) score = Math.max(phoneScore(c, digits), nrScore(c, fq) === 3 ? 3 : -1);
+      if (score < 0 && hasWords(c._text)) score = 0;
     }
-    if (score < 0 && words.every((w) => c._text.includes(w))) score = 0;
-    if (score >= 0) hits.push([score, c]);
-  }
-  hits.sort((a, b) => b[0] - a[0] || String(a[1].name).localeCompare(String(b[1].name), 'de'));
-  return hits.slice(0, limit).map((h) => h[1]);
+    if (score >= 0) hits.push([score, i, c]);
+  });
+  hits.sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  return hits.slice(0, limit).map((h) => h[2]);
 }

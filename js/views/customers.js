@@ -1,8 +1,8 @@
 // Kundenverwaltung: Suche, Anlegen/Bearbeiten, CSV-Import und -Export.
 
-import { html, useMemo, useState, Icon, Modal, saveFile, pickFile, useAppState } from '../lib/ui.js';
+import { html, useMemo, useRef, useState, Icon, Modal, saveFile, pickFile, useAppState } from '../lib/ui.js';
 import * as store from '../lib/store.js';
-import { CUSTOMER_FIELDS, customersToRows, decodeText, guessMapping, looksLikeHeader, parseCsv, rowsToCustomers, searchCustomers, toCsv } from '../lib/csv.js';
+import { CUSTOMER_FIELDS, SEARCH_FIELDS, customersToRows, decodeText, guessMapping, looksLikeHeader, parseCsv, rowsToCustomers, searchCustomers, toCsv } from '../lib/csv.js';
 import { compareNr, dayKey } from '../lib/util.js';
 
 const address = (c) => [c.street, [c.zip, c.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
@@ -62,10 +62,65 @@ function CustomerRow({ c, onClick }) {
   </button>`;
 }
 
-/** Tabelle: Kundennummer | Name | Adresse | Telefon */
-function CustomerTable({ customers, onPick, children }) {
+/** Gewähltes Suchfeld (bleibt gespeichert). */
+function useSearchField() {
+  const { settings } = useAppState();
+  const field = SEARCH_FIELDS[settings.ui.customerField] ? settings.ui.customerField : 'all';
+  return [field, (f) => store.saveSettings('ui', { customerField: f })];
+}
+
+/** Suchfeld mit Auswahl, worin gesucht wird. */
+function CustomerSearch({ query, setQuery, field, setField, autofocus }) {
+  const ref = useRef();
+  const choose = (f) => {
+    setField(f);
+    ref.current?.focus();
+  };
+  const numeric = field === 'nr' || field === 'phone';
+  return html`<div class="customer-search">
+    <div class="search">
+      <${Icon} name="search" />
+      <input
+        ref=${ref}
+        type="search"
+        autofocus=${autofocus}
+        autocomplete="off"
+        autocorrect="off"
+        spellcheck=${false}
+        inputmode=${numeric ? (field === 'phone' ? 'tel' : 'numeric') : 'text'}
+        placeholder=${field === 'all' ? SEARCH_FIELDS.all.placeholder : `Nur ${SEARCH_FIELDS[field].placeholder} durchsuchen`}
+        value=${query}
+        onInput=${(e) => setQuery(e.target.value)}
+      />
+      ${query && html`<button class="btn icon-btn ghost" onClick=${() => (setQuery(''), ref.current?.focus())} aria-label="Suche leeren"><${Icon} name="x" /></button>`}
+    </div>
+    <div class="search-in" role="radiogroup" aria-label="Suchen in">
+      <span class="field-label">Suchen in</span>
+      ${Object.entries(SEARCH_FIELDS).map(
+        ([key, f]) => html`<button class="chip ${field === key ? 'on' : ''}" role="radio" aria-checked=${field === key} onClick=${() => choose(key)}>${f.label}</button>`,
+      )}
+    </div>
+  </div>`;
+}
+
+const COLUMNS = [
+  ['nr', 'Nr.'],
+  ['name', 'Name'],
+  ['address', 'Adresse'],
+  ['phone', 'Telefon'],
+];
+
+/** Tabelle: Kundennummer | Name | Adresse | Telefon. Spaltenkopf antippen = nur in dieser Spalte suchen. */
+function CustomerTable({ customers, onPick, field, setField, children }) {
   return html`<div class="customer-list" role="list">
-    <div class="customer-head" aria-hidden="true"><span>Nr.</span><span>Name</span><span>Adresse</span><span>Telefon</span></div>
+    <div class="customer-head">
+      ${COLUMNS.map(
+        ([key, label]) =>
+          html`<button class=${field === key ? 'on' : ''} aria-pressed=${field === key} onClick=${() => setField(field === key ? 'all' : key)} title="Nur in dieser Spalte suchen">
+            ${label}${field === key && html` <${Icon} name="search" size=${13} />`}
+          </button>`,
+      )}
+    </div>
     ${customers.map((c) => html`<${CustomerRow} key=${c.id} c=${c} onClick=${() => onPick(c)} />`)}
     ${children}
   </div>`;
@@ -80,9 +135,19 @@ export function CustomerPicker({ onPick, onClose }) {
   const { customers } = useAppState();
   const [query, setQuery] = useState('');
   const [form, setForm] = useState(null);
+  const [field, setField] = useSearchField();
   const sorted = useMemo(() => [...customers].sort(byNr), [customers]);
-  const results = useMemo(() => searchCustomers(sorted, query, 30), [sorted, query]);
+  const results = useMemo(() => searchCustomers(sorted, query, 30, field), [sorted, query, field]);
   const isNumber = /^[\d\s+\-/()]+$/.test(query.trim());
+  // Vorbelegung für "Neuer Kunde" passend zum Suchfeld
+  const draft = () => {
+    const q = query.trim();
+    if (!q) return {};
+    if (field === 'nr') return { nr: q };
+    if (field === 'address') return { street: q };
+    if (field === 'phone' || (field === 'all' && isNumber)) return { phone: q };
+    return { name: q };
+  };
 
   if (form) return html`<${CustomerForm} customer=${form} onSaved=${(c) => onPick(stripIndex(c))} onClose=${() => setForm(null)} />`;
   return html`<${Modal}
@@ -90,24 +155,12 @@ export function CustomerPicker({ onPick, onClose }) {
     size="lg"
     onClose=${onClose}
     footer=${html`<span class="muted small">${customers.length} Kunden gespeichert</span><span class="spacer"></span>
-      <button class="btn primary" onClick=${() => setForm(query.trim() ? (isNumber ? { phone: query.trim() } : { name: query.trim() }) : {})}>
+      <button class="btn primary" onClick=${() => setForm(draft())}>
         <${Icon} name="plus" /> Neuer Kunde${query.trim() ? ` „${query.trim()}“` : ''}
       </button>`}
   >
-    <div class="search">
-      <${Icon} name="search" />
-      <input
-        type="search"
-        autofocus
-        autocomplete="off"
-        autocorrect="off"
-        spellcheck=${false}
-        placeholder="Telefonnummer, Name oder Straße"
-        value=${query}
-        onInput=${(e) => setQuery(e.target.value)}
-      />
-    </div>
-    <${CustomerTable} customers=${results} onPick=${(c) => onPick(stripIndex(c))}>
+    <${CustomerSearch} query=${query} setQuery=${setQuery} field=${field} setField=${setField} autofocus=${true} />
+    <${CustomerTable} customers=${results} field=${field} setField=${setField} onPick=${(c) => onPick(stripIndex(c))}>
       ${results.length === 0 &&
       html`<div class="empty"><p>${customers.length === 0 ? 'Noch keine Kunden gespeichert. Unter „Kunden“ lässt sich eine Liste importieren.' : 'Kein Kunde gefunden.'}</p></div>`}
     <//>
@@ -215,18 +268,16 @@ export function CustomersView() {
   const [query, setQuery] = useState('');
   const [form, setForm] = useState(null);
   const [importFile, setImportFile] = useState(null);
+  const [field, setField] = useSearchField();
   const sorted = useMemo(() => [...customers].sort(byNr), [customers]);
-  const results = useMemo(() => searchCustomers(sorted, query, 200), [sorted, query]);
+  const results = useMemo(() => searchCustomers(sorted, query, 200, field), [sorted, query, field]);
 
   const exportCsv = () => saveFile(`kunden-${dayKey()}.csv`, toCsv(customersToRows(sorted)), 'text/csv');
 
   return html`<div class="page">
     <header class="page-head">
       <h1>Kunden <span class="count">${customers.length}</span></h1>
-      <div class="search">
-        <${Icon} name="search" />
-        <input type="search" autocomplete="off" placeholder="Telefonnummer, Name oder Straße" value=${query} onInput=${(e) => setQuery(e.target.value)} />
-      </div>
+      <span class="spacer"></span>
       <button class="btn" onClick=${async () => setImportFile(await chooseImportFile())}><${Icon} name="upload" /> Importieren</button>
       <button class="btn" disabled=${!customers.length} onClick=${exportCsv}><${Icon} name="download" /> Exportieren</button>
       <button class="btn primary" onClick=${() => setForm({})}><${Icon} name="plus" /> Neuer Kunde</button>
@@ -238,7 +289,8 @@ export function CustomersView() {
             <p>Noch keine Kunden gespeichert.</p>
             <p class="muted">Über „Importieren“ lässt sich eine vorhandene Kundenliste als CSV-Datei einlesen<br />(z. B. aus Excel: Speichern unter › CSV). Die Spalten werden beim Import zugeordnet.</p>
           </div>`
-        : html`<div class="card"><${CustomerTable} customers=${results} onPick=${(c) => setForm(stripIndex(c))}>
+        : html`<${CustomerSearch} query=${query} setQuery=${setQuery} field=${field} setField=${setField} />
+          <div class="card top-gap"><${CustomerTable} customers=${results} field=${field} setField=${setField} onPick=${(c) => setForm(stripIndex(c))}>
             ${results.length === 0 && html`<div class="empty"><p>Kein Kunde gefunden.</p></div>`}
             ${results.length === 200 && html`<p class="muted small center">Es werden die ersten 200 Treffer angezeigt – Suche verfeinern.</p>`}
           <//></div>`}

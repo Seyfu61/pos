@@ -1211,6 +1211,38 @@ textarea.input {
   gap: 12px;
   padding: 0 14px;
 }
+.customer-search {
+  display: grid;
+  gap: 8px;
+}
+.search-in {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.search-in .field-label {
+  margin-right: 4px;
+}
+.customer-head button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  margin: 0 -6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+.customer-head button.on {
+  background: var(--ink);
+  color: #fff;
+}
 .customer-head {
   position: sticky;
   top: 0;

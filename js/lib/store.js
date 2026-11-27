@@ -54,8 +54,11 @@ export function setView(view) {
 // --- Start ---------------------------------------------------------------------
 
 // 2: Auswahl bei Burgern/Gyros/Nuggets, Joghurt groß, Getränke ohne Küchenbon · 3: Dressing-Auswahl bei Salaten
-// 4: Joghurt klein
-export const MENU_SCHEMA = 4;
+// 4: Joghurt klein · 5: Joghurtdressing unter "Pizzabrötchen Extra" entfernt
+export const MENU_SCHEMA = 5;
+
+// Artikel von bringstar, die ab einer Stufe entfernt wurden (ID -> Stufe).
+const REMOVED_SINCE = { 12450: 5 };
 
 // Eigene Artikel der Kasse (nicht von bringstar) und ab welcher Stufe es sie gibt.
 const LOCAL_SINCE = { 'joghurt-gross': 2, 'joghurt-klein': 4 };
@@ -90,6 +93,15 @@ export function migrateMenu(menu, seed = seedMenu()) {
   const cats = new Set(menu.categories.map((c) => c.id));
   for (const p of seed.products) {
     if (typeof p.id === 'string' && !known.has(p.id) && cats.has(p.cat) && (LOCAL_SINCE[p.id] ?? 2) > from) insertLikeSeed(products, clone(p), seed.products);
+  }
+  // Entfernte Artikel herausnehmen; reine Extras-Kategorien, die dadurch leer werden, entfallen mit.
+  const removed = products.filter((p) => (REMOVED_SINCE[p.id] ?? 0) > from);
+  if (removed.length) {
+    for (const p of removed) products.splice(products.indexOf(p), 1);
+    const emptied = new Set(
+      removed.map((p) => p.cat).filter((id) => !products.some((p) => p.cat === id) && categories.find((c) => c.id === id)?.isExtras),
+    );
+    categories = categories.filter((c) => !emptied.has(c.id)).map((c) => (emptied.has(c.extras) ? { ...c, extras: null } : c));
   }
   if (from < 2) {
     categories = categories.map((c) => (/getränk/i.test(c.name) && (c.station ?? 'kitchen') === 'kitchen' ? { ...c, station: 'none' } : c));
