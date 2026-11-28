@@ -92,6 +92,11 @@ const EXCLUDED_PRODUCTS = [
 const LOCAL_PRODUCTS = [
   { id: 'joghurt-klein', cat: /^beilagen$/i, name: 'Joghurt klein', desc: 'hausgemachtes Joghurtdressing', v: [['', 150]] },
   { id: 'joghurt-gross', cat: /^beilagen$/i, name: 'Joghurt groß', desc: 'hausgemachtes Joghurtdressing', v: [['', 250]] },
+  { id: 'sauce-bbq', cat: /^beilagen$/i, name: 'BBQ-Sauce', v: [['', 100]] },
+  { id: 'sauce-suesssauer', cat: /^beilagen$/i, name: 'Süß-sauer-Sauce', v: [['', 100]] },
+  { id: 'ketchup', cat: /^beilagen$/i, name: 'Ketchup', v: [['', 50]] },
+  { id: 'mayo', cat: /^beilagen$/i, name: 'Mayo', v: [['', 50]] },
+  { id: 'knoblauch', cat: /^extras \(pizza\)$/i, name: 'Knoblauch', v: [['', 0]] }, // kostenlos
 ];
 
 // Tippfehler der Quelle, die beim Import korrigiert werden (Namen und Beschreibungen).

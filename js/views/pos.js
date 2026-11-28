@@ -29,6 +29,7 @@ function feeHint(cart) {
 function priceLabel(p) {
   const prices = p.v.map((v) => v[1]);
   const min = Math.min(...prices);
+  if (prices.every((x) => x === 0)) return 'gratis';
   return prices.some((x) => x !== min) ? `ab ${eur(min)}` : eur(min);
 }
 
@@ -181,7 +182,7 @@ function LineEditor({ product, line, onClose }) {
         ${extrasList.map(
           (e) =>
             html`<button class="extra ${chosen.has(e.name) ? 'on' : ''}" onClick=${() => toggle(e.name)}>
-              <span>${e.name}</span><span class="extra-price">+${eur(priceOf(e), { symbol: false })}</span>
+              <span>${e.name}</span><span class="extra-price">${priceOf(e) ? `+${eur(priceOf(e), { symbol: false })}` : 'gratis'}</span>
             </button>`,
         )}
       </div>`}

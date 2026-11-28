@@ -366,7 +366,10 @@ try {
   assert.match(await page.locator('.line', { hasText: 'Pizzabrötchen' }).innerText(), /\+ Zwiebeln[\s\S]*9,00/);
   // Neuer Artikel "Joghurt groß" unter Beilagen, ohne Dialog direkt auf den Bon
   await page.locator('.cat', { hasText: 'Beilagen' }).click();
-  assert.deepEqual((await page.locator('.product .product-name').allInnerTexts()).slice(-2), ['Joghurt klein', 'Joghurt groß']);
+  assert.deepEqual((await page.locator('.product .product-name').allInnerTexts()).slice(-6), ['Joghurt klein', 'Joghurt groß', 'BBQ-Sauce', 'Süß-sauer-Sauce', 'Ketchup', 'Mayo']);
+  await page.locator('.product', { hasText: 'Mayo' }).click(); // ohne Dialog direkt auf den Bon
+  assert.match(await page.locator('.line', { hasText: 'Mayo' }).innerText(), /0,50/);
+  await page.locator('.line', { hasText: 'Mayo' }).locator('.qty-btn').first().click();
   await page.locator('.product', { hasText: 'Joghurt groß' }).click();
   assert.match(await page.locator('.line', { hasText: 'Joghurt groß' }).innerText(), /2,50/);
   await page.locator('.product', { hasText: 'Joghurt klein' }).click();
@@ -401,6 +404,8 @@ try {
   await page.locator('.half-opt', { hasText: 'Pizza Funghi' }).click();
   assert.match(await page.locator('.half-summary').innerText(), /½ 223 Pizza Salami[\s\S]*½ 222 Pizza Funghi[\s\S]*= 19,90 €[\s\S]*teurere Hälfte/);
   await page.locator('.extra', { hasText: 'Käserand' }).click();
+  assert.match(await page.locator('.extra', { hasText: 'Knoblauch' }).innerText(), /gratis/);
+  await page.locator('.extra', { hasText: 'Knoblauch' }).click();
   await shot('halb-halb');
   assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /22,40/); // 19,90 + 2,50
   await page.locator('.modal-foot .btn.primary').click();

@@ -36,7 +36,7 @@ test('Artikelnummern sortieren', () => {
 
 test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   const byNr = (nr) => PRODUCTS.filter((p) => p.nr === nr);
-  assert.equal(PRODUCTS.length, 164);
+  assert.equal(PRODUCTS.length, 169);
   assert.ok(!PRODUCTS.some((p) => p.name === 'hausgemachtes Joghurtdressing'), 'Joghurtdressing unter Pizzabrötchen entfernt');
   assert.ok(!CATEGORIES.some((c) => c.name === 'Pizzabrötchen Extra'), 'leere Kategorie entfällt');
   assert.equal(CATEGORIES.find((c) => c.name === 'Pizzabrötchen').extras, CATEGORIES.find((c) => c.name === 'Extras (Pizza)').id, 'Pizzabrötchen mit den Pizza-Extras');
@@ -50,6 +50,12 @@ test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   // eigener Artikel (nicht bei bringstar)
   const joghurt = PRODUCTS.find((p) => p.id === 'joghurt-gross');
   assert.deepEqual([joghurt.name, joghurt.v, CATEGORIES.find((c) => c.id === joghurt.cat).name], ['Joghurt groß', [['', 250]], 'Beilagen']);
+  // Saucen unter Beilagen, kostenloser Knoblauch bei den Pizza-Extras
+  const beilagen = PRODUCTS.filter((p) => p.cat === joghurt.cat).map((p) => [p.name, p.v[0][1]]);
+  assert.deepEqual(beilagen.slice(-6), [['Joghurt klein', 150], ['Joghurt groß', 250], ['BBQ-Sauce', 100], ['Süß-sauer-Sauce', 100], ['Ketchup', 50], ['Mayo', 50]]);
+  const knoblauch = PRODUCTS.find((p) => p.id === 'knoblauch');
+  assert.deepEqual([knoblauch.v, CATEGORIES.find((c) => c.id === knoblauch.cat).name], [[['', 0]], 'Extras (Pizza)']);
+  assert.equal(extraPrice(knoblauch, PRODUCTS.find((p) => p.nr === '220'), 2), 0, 'auch auf dem Blech kostenlos');
   const klein = PRODUCTS.find((p) => p.id === 'joghurt-klein');
   assert.deepEqual([klein.name, klein.v, klein.cat], ['Joghurt klein', [['', 150]], joghurt.cat]);
   assert.equal(PRODUCTS.indexOf(klein) + 1, PRODUCTS.indexOf(joghurt), 'klein direkt vor groß');
@@ -57,7 +63,7 @@ test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   const numbered = PRODUCTS.filter((p) => p.nr).map((p) => p.nr);
   assert.equal(new Set(numbered).size, numbered.length);
   for (const p of PRODUCTS) {
-    assert.ok(p.v.length > 0 && p.v.every(([, c]) => Number.isInteger(c) && c > 0), p.name);
+    assert.ok(p.v.length > 0 && p.v.every(([, c]) => Number.isInteger(c) && (c > 0 || p.id === 'knoblauch')), p.name);
     assert.ok(CATEGORIES.some((c) => c.id === p.cat), p.name);
   }
   const cat = (name) => CATEGORIES.find((c) => c.name === name);
@@ -237,6 +243,18 @@ test('Von Hand geänderte Speisekarte bekommt die neuen Auswahlmöglichkeiten, e
   const ownExtras = JSON.parse(JSON.stringify(v5));
   ownExtras.categories.find((c) => c.name === 'Pizzabrötchen').extras = 275;
   assert.equal(migrateMenu(ownExtras, seed).categories.find((c) => c.name === 'Pizzabrötchen').extras, 275);
+
+  // Stand nach Stufe 6: Saucen und Knoblauch kommen dazu, an ihrer Stelle in der Speisekarte
+  const NEW7 = ['sauce-bbq', 'sauce-suesssauer', 'ketchup', 'mayo', 'knoblauch'];
+  const v6b = JSON.parse(JSON.stringify(seed));
+  v6b.schema = 6;
+  v6b.edited = true;
+  v6b.products = v6b.products.filter((p) => !NEW7.includes(p.id));
+  const n7 = migrateMenu(v6b, seed);
+  assert.deepEqual(n7.products.map((p) => p.id), seed.products.map((p) => p.id), 'gleiche Reihenfolge wie die mitgelieferte Karte');
+  // nach Stufe 7 gelöscht -> bleibt gelöscht
+  const v7 = { ...n7, products: n7.products.filter((p) => p.id !== 'mayo') };
+  assert.equal(migrateMenu(v7, seed), v7);
 
   // Stand nach Stufe 4: Joghurtdressing (bringstar) unter "Pizzabrötchen Extra" wird entfernt, die leere Kategorie entfällt
   const v4 = JSON.parse(JSON.stringify(seed));

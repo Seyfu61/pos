@@ -62,13 +62,14 @@ export function setView(view) {
 // 2: Auswahl bei Burgern/Gyros/Nuggets, Joghurt groß, Getränke ohne Küchenbon · 3: Dressing-Auswahl bei Salaten
 // 4: Joghurt klein · 5: Joghurtdressing unter "Pizzabrötchen Extra" entfernt
 // 6: Allergen-Kürzel entfernt, Pizzabrötchen mit den Pizza-Extras
-export const MENU_SCHEMA = 6;
+// 7: Saucen (BBQ, Süß-sauer, Ketchup, Mayo) unter Beilagen, Knoblauch bei den Pizza-Extras
+export const MENU_SCHEMA = 7;
 
 // Artikel von bringstar, die ab einer Stufe entfernt wurden (ID -> Stufe).
 const REMOVED_SINCE = { 12450: 5 };
 
 // Eigene Artikel der Kasse (nicht von bringstar) und ab welcher Stufe es sie gibt.
-const LOCAL_SINCE = { 'joghurt-gross': 2, 'joghurt-klein': 4 };
+const LOCAL_SINCE = { 'joghurt-gross': 2, 'joghurt-klein': 4, 'sauce-bbq': 7, 'sauce-suesssauer': 7, ketchup: 7, mayo: 7, knoblauch: 7 };
 
 /** Artikel an der Stelle einfügen, an der er in der mitgelieferten Speisekarte steht (vor seinem Nachfolger). */
 function insertLikeSeed(products, product, seedProducts) {

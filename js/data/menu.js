@@ -1,6 +1,6 @@
 // Automatisch erzeugt von tools/fetch-menu.mjs – nicht von Hand bearbeiten.
 // Quelle: https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice
-export const MENU_SOURCE = {"url":"https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice","fetchedAt":"2026-11-28","rev":"xoll9f"};
+export const MENU_SOURCE = {"url":"https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice","fetchedAt":"2026-11-28","rev":"tfa0ql"};
 
 // tax: MwSt.-Satz in %, extras: Kategorie mit den passenden Extras, isExtras: reine Extras-Kategorie,
 // station: auf welchem Küchenbon die Artikel stehen (pizza | kitchen | none = auf keinem)
@@ -94,6 +94,7 @@ export const PRODUCTS = [
   {"id":13350,"cat":269,"nr":"","name":"Hähnchen","desc":"","v":[["30cm",250],["40cm",400],["40x60cm",500]]},
   {"id":13349,"cat":269,"nr":"","name":"Meeresfrüchte","desc":"","v":[["30cm",250],["40cm",400],["40x60cm",500]]},
   {"id":13351,"cat":269,"nr":"","name":"Sucuk","desc":"","v":[["30cm",250],["40cm",400],["40x60cm",500]]},
+  {"id":"knoblauch","cat":269,"nr":"","name":"Knoblauch","desc":"","v":[["",0]]},
   {"id":13301,"cat":260,"nr":"260","name":"Calzone Salami","desc":"Salami, Käse","v":[["30cm",1060]]},
   {"id":13302,"cat":260,"nr":"261","name":"Calzone Bacon","desc":"Käse, Schinken","v":[["30cm",1060]]},
   {"id":13303,"cat":260,"nr":"262","name":"Calzone Tonno","desc":"Käse, Thunfisch, Zwiebeln","v":[["30cm",1170]]},
@@ -180,6 +181,10 @@ export const PRODUCTS = [
   {"id":13313,"cat":257,"nr":"","name":"Gebratene Peperoni","desc":"","v":[["",590]]},
   {"id":"joghurt-klein","cat":257,"nr":"","name":"Joghurt klein","desc":"hausgemachtes Joghurtdressing","v":[["",150]]},
   {"id":"joghurt-gross","cat":257,"nr":"","name":"Joghurt groß","desc":"hausgemachtes Joghurtdressing","v":[["",250]]},
+  {"id":"sauce-bbq","cat":257,"nr":"","name":"BBQ-Sauce","desc":"","v":[["",100]]},
+  {"id":"sauce-suesssauer","cat":257,"nr":"","name":"Süß-sauer-Sauce","desc":"","v":[["",100]]},
+  {"id":"ketchup","cat":257,"nr":"","name":"Ketchup","desc":"","v":[["",50]]},
+  {"id":"mayo","cat":257,"nr":"","name":"Mayo","desc":"","v":[["",50]]},
   {"id":13805,"cat":276,"nr":"","name":"Wasser still","desc":"Preise enthalten Pfand","v":[["0,5 l",175]]},
   {"id":13804,"cat":276,"nr":"","name":"Coca-Cola","desc":"Preise enthalten Pfand","v":[["0,33 l",250],["1,0 l",325]]},
   {"id":13802,"cat":276,"nr":"","name":"Coca-Cola light","desc":"Preise enthalten Pfand","v":[["0,33 l",250],["1,0 l",325]]},

@@ -2,7 +2,7 @@
 // Strategie "Netz zuerst": Ist das Netz da, kommt immer die aktuelle Version;
 // ohne Netz wird die zuletzt geladene Fassung aus dem Zwischenspeicher verwendet.
 
-const CACHE = 'kasse-v16'; // muss zu APP_VERSION in js/version.js passen
+const CACHE = 'kasse-v17'; // muss zu APP_VERSION in js/version.js passen
 const FILES = [
   './',
   'index.html',
