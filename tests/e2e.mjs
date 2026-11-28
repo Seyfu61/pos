@@ -330,7 +330,7 @@ try {
 
   // Gyros: Twister Pommes kosten 1,50 € mehr
   await page.locator('.cat', { hasText: 'Gyros vom Spieß' }).click();
-  await page.locator('.product', { hasText: 'Gyros (2) mit Zaziki' }).click();
+  await page.locator('.product', { hasText: 'Gyros mit Zaziki' }).click();
   assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /14,90/);
   await page.locator('.extras.choice .extra', { hasText: 'Twister Pommes' }).click();
   assert.match(await page.locator('.extras.choice .extra', { hasText: 'Twister Pommes' }).innerText(), /\+1,50/);
@@ -355,6 +355,15 @@ try {
   await page.locator('.extras.choice .extra', { hasText: 'Essig+Öl' }).click();
   await page.locator('.modal-foot .btn.primary').click();
   assert.match(await page.locator('.line', { hasText: 'Bauernsalat' }).innerText(), /groß[\s\S]*Dressing: Essig\+Öl[\s\S]*9,60/);
+  // Pizzabrötchen mit den Pizza-Extras (Preis der kleinsten Pizza-Größe); Allergen-Kürzel sind entfernt
+  await page.locator('.cat', { hasText: 'Pizzabrötchen' }).click();
+  assert.ok(!(await page.locator('.product .product-name').allInnerTexts()).some((t) => /\(\d/.test(t)), 'keine Allergen-Kürzel');
+  await page.locator('.product', { hasText: 'Pizzabrötchen mit Salami' }).first().click();
+  await page.locator('.extra', { hasText: 'Zwiebeln' }).click();
+  assert.match(await page.locator('.extra', { hasText: 'Zwiebeln' }).innerText(), /\+1,50/);
+  assert.match(await page.locator('.modal-foot .btn.primary').innerText(), /9,00/); // 7,50 + 1,50
+  await page.locator('.modal-foot .btn.primary').click();
+  assert.match(await page.locator('.line', { hasText: 'Pizzabrötchen' }).innerText(), /\+ Zwiebeln[\s\S]*9,00/);
   // Neuer Artikel "Joghurt groß" unter Beilagen, ohne Dialog direkt auf den Bon
   await page.locator('.cat', { hasText: 'Beilagen' }).click();
   assert.deepEqual((await page.locator('.product .product-name').allInnerTexts()).slice(-2), ['Joghurt klein', 'Joghurt groß']);
@@ -363,7 +372,7 @@ try {
   await page.locator('.product', { hasText: 'Joghurt klein' }).click();
   assert.match(await page.locator('.line', { hasText: 'Joghurt klein' }).innerText(), /1,50/);
   // wieder entfernen
-  for (const name of ['Gyros', 'Nuggets', 'Bauernsalat', 'Joghurt groß', 'Joghurt klein']) await page.locator('.line', { hasText: name }).locator('.qty-btn').first().click();
+  for (const name of ['Gyros', 'Nuggets', 'Bauernsalat', 'Pizzabrötchen', 'Joghurt groß', 'Joghurt klein']) await page.locator('.line', { hasText: name }).locator('.qty-btn').first().click();
   assert.equal(await page.locator('.line').count(), 0);
 
   // Leerer Bon -> zurück auf die erste Kategorie
@@ -571,6 +580,7 @@ try {
   await nav('Kasse');
   await page.getByPlaceholder('Artikel-Nr. oder Name').fill('299');
   await page.getByPlaceholder('Artikel-Nr. oder Name').press('Enter');
+  await page.locator('.modal-foot .btn.primary').click(); // Pizza hat Extras -> Dialog
   await page.locator('.line', { hasText: 'Pizza Spezial' }).waitFor();
   await page.getByPlaceholder('Artikel-Nr. oder Name').fill('margh');
   assert.match(await page.locator('.product').first().innerText(), /ab 9,90/);

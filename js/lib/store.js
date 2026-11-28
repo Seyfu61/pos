@@ -1,7 +1,7 @@
 // Zentraler App-Zustand + alle Aktionen, die Daten verändern.
 
 import * as db from './db.js';
-import { clone, dayKey, normPhone, uid } from './util.js';
+import { clone, dayKey, normPhone, stripAllergens, uid } from './util.js';
 import { indexCustomer } from './csv.js';
 import { ORDER_TYPES, autoDeliveryFee, categoryStation, halfPrice, priceForSize, isOpenOrder, orderTotals, sameLine, timeToday } from './order.js';
 import { DEFAULT_SETTINGS, mergeSettings } from '../data/defaults.js';
@@ -61,7 +61,8 @@ export function setView(view) {
 
 // 2: Auswahl bei Burgern/Gyros/Nuggets, Joghurt groß, Getränke ohne Küchenbon · 3: Dressing-Auswahl bei Salaten
 // 4: Joghurt klein · 5: Joghurtdressing unter "Pizzabrötchen Extra" entfernt
-export const MENU_SCHEMA = 5;
+// 6: Allergen-Kürzel entfernt, Pizzabrötchen mit den Pizza-Extras
+export const MENU_SCHEMA = 6;
 
 // Artikel von bringstar, die ab einer Stufe entfernt wurden (ID -> Stufe).
 const REMOVED_SINCE = { 12450: 5 };
@@ -108,6 +109,21 @@ export function migrateMenu(menu, seed = seedMenu()) {
       removed.map((p) => p.cat).filter((id) => !products.some((p) => p.cat === id) && categories.find((c) => c.id === id)?.isExtras),
     );
     categories = categories.filter((c) => !emptied.has(c.id)).map((c) => (emptied.has(c.extras) ? { ...c, extras: null } : c));
+  }
+  if (from < 6) {
+    // Allergen-/Zusatzstoff-Kürzel aus Namen, Beschreibungen und Auswahl entfernen
+    for (let i = 0; i < products.length; i++) {
+      const p = products[i];
+      products[i] = {
+        ...p,
+        name: stripAllergens(p.name),
+        desc: stripAllergens(p.desc),
+        ...(p.opts ? { opts: p.opts.map((g) => ({ ...g, choices: g.choices.map(([n, c]) => [stripAllergens(n), c]) })) } : {}),
+      };
+    }
+    // Pizzabrötchen bekommen die Extras der Pizza (falls noch keine eigenen eingestellt sind)
+    const pizzaExtras = categories.find((c) => /^pizza$/i.test(c.name))?.extras;
+    if (pizzaExtras != null) categories = categories.map((c) => (/^pizzabrötchen$/i.test(c.name) && c.extras == null ? { ...c, extras: pizzaExtras } : c));
   }
   if (from < 2) {
     categories = categories.map((c) => (/getränk/i.test(c.name) && (c.station ?? 'kitchen') === 'kitchen' ? { ...c, station: 'none' } : c));

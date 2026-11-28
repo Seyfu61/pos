@@ -441,8 +441,9 @@ export function PosView() {
   }, [menu, activeCat, showExtras, q]);
 
   const pick = (product) => {
-    // Mehrere Größen oder Auswahlmöglichkeiten (Pommes, Zutaten, Sauce): erst den Dialog zeigen.
-    if (product.v.length > 1 || product.opts?.length) setEditing({ product });
+    // Mehrere Größen, Auswahlmöglichkeiten (Pommes, Zutaten, Sauce) oder Extras: erst den Dialog zeigen.
+    const hasExtras = menu.categories.find((c) => c.id === product.cat)?.extras != null;
+    if (product.v.length > 1 || product.opts?.length || hasExtras) setEditing({ product });
     else store.addLine(store.makeLine(product));
   };
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { compareNr, eur, fold, normPhone, parseEur } from '../js/lib/util.js';
+import { compareNr, eur, fold, normPhone, parseEur, stripAllergens } from '../js/lib/util.js';
 import { ORDER_TYPES, checkoutProblems, canHalve, halfPrice, priceForSize, fmtMinutes, isOpenOrder, nextStage, orderDue, timeToday, autoDeliveryFee, zoneFee, categoryStation, daySummary, defaultSelection, entriesToSelection, extraLabel, extraPrice, lineTotal, missingSelection, orderTotals, sameLine, selectionEntries } from '../js/lib/order.js';
 import { removableIngredients, sauceChoices } from '../tools/fetch-menu.mjs';
 import { MENU_SCHEMA, makeLine, migrateMenu, seedMenu } from '../js/lib/store.js';
@@ -39,7 +39,7 @@ test('Speisekarte: Artikelnummern und Preise aus dem Import', () => {
   assert.equal(PRODUCTS.length, 164);
   assert.ok(!PRODUCTS.some((p) => p.name === 'hausgemachtes Joghurtdressing'), 'Joghurtdressing unter Pizzabrötchen entfernt');
   assert.ok(!CATEGORIES.some((c) => c.name === 'Pizzabrötchen Extra'), 'leere Kategorie entfällt');
-  assert.equal(CATEGORIES.find((c) => c.name === 'Pizzabrötchen').extras, null);
+  assert.equal(CATEGORIES.find((c) => c.name === 'Pizzabrötchen').extras, CATEGORIES.find((c) => c.name === 'Extras (Pizza)').id, 'Pizzabrötchen mit den Pizza-Extras');
   assert.equal(CATEGORIES.length, 13);
   assert.deepEqual(byNr('220')[0].v, [['30cm', 950], ['40cm', 1740], ['40x60cm', 2790]]);
   assert.equal(byNr('220')[0].name, 'Pizza Margherita');
@@ -79,7 +79,7 @@ test('Speisekarte: Tippfehler der Quelle sind korrigiert', () => {
     assert.ok(!all.includes(typo), `noch enthalten: ${typo}`);
   }
   const names = PRODUCTS.map((p) => p.name);
-  for (const name of ['Pizza Quattro Stagioni', 'Pizza Mediterrane', 'Spiegelei', 'Röstzwiebeln', 'Chili-Cheeseburger', 'BBQ-Bacon-Cheeseburger', 'Wasser still', 'Gyros (2) mit Zaziki']) {
+  for (const name of ['Pizza Quattro Stagioni', 'Pizza Mediterrane', 'Spiegelei', 'Röstzwiebeln', 'Chili-Cheeseburger', 'BBQ-Bacon-Cheeseburger', 'Wasser still', 'Gyros mit Zaziki']) {
     assert.ok(names.includes(name), `fehlt: ${name}`);
   }
   assert.deepEqual(PRODUCTS.find((p) => p.name === 'Wasser still').v, [['0,5 l', 175]]);
@@ -219,8 +219,24 @@ test('Von Hand geänderte Speisekarte bekommt die neuen Auswahlmöglichkeiten, e
   assert.equal(ids.indexOf('joghurt-klein') + 1, ids.indexOf('joghurt-gross'));
   assert.equal(m4.products.length, seed.products.length);
   // ... aber nicht, wenn der Artikel nach Stufe 4 gelöscht wurde
-  const v5 = { ...m4, products: m4.products.filter((p) => p.id !== 'joghurt-klein') };
-  assert.equal(migrateMenu(v5, seed), v5);
+  const v6 = { ...m4, products: m4.products.filter((p) => p.id !== 'joghurt-klein') };
+  assert.equal(migrateMenu(v6, seed), v6);
+
+  // Stand nach Stufe 5: Allergen-Kürzel werden auch in von Hand geänderten Karten entfernt, Pizzabrötchen bekommen die Pizza-Extras
+  const v5 = JSON.parse(JSON.stringify(seed));
+  v5.schema = 5;
+  v5.edited = true;
+  v5.categories.find((c) => c.name === 'Pizzabrötchen').extras = null;
+  const own = v5.products.find((p) => p.nr === '221');
+  Object.assign(own, { name: 'Pizza Prosciutto (1,7,9)', desc: 'Tomatensauce, Käse (2,4,6), Schinken (1,7,9)', v: [['30cm', 1111]] });
+  const n6 = migrateMenu(v5, seed);
+  const p221 = n6.products.find((p) => p.nr === '221');
+  assert.deepEqual([p221.name, p221.desc, p221.v], ['Pizza Prosciutto', 'Tomatensauce, Käse, Schinken', [['30cm', 1111]]], 'eigener Preis bleibt');
+  assert.equal(n6.categories.find((c) => c.name === 'Pizzabrötchen').extras, 269);
+  // eigene Extras-Einstellung der Pizzabrötchen bleibt
+  const ownExtras = JSON.parse(JSON.stringify(v5));
+  ownExtras.categories.find((c) => c.name === 'Pizzabrötchen').extras = 275;
+  assert.equal(migrateMenu(ownExtras, seed).categories.find((c) => c.name === 'Pizzabrötchen').extras, 275);
 
   // Stand nach Stufe 4: Joghurtdressing (bringstar) unter "Pizzabrötchen Extra" wird entfernt, die leere Kategorie entfällt
   const v4 = JSON.parse(JSON.stringify(seed));
@@ -232,7 +248,7 @@ test('Von Hand geänderte Speisekarte bekommt die neuen Auswahlmöglichkeiten, e
   const m5 = migrateMenu(v4, seed);
   assert.ok(!m5.products.some((p) => p.id === 12450));
   assert.ok(!m5.categories.some((c) => c.id === 272));
-  assert.equal(m5.categories.find((c) => c.name === 'Pizzabrötchen').extras, null);
+  assert.equal(m5.categories.find((c) => c.name === 'Pizzabrötchen').extras, 269, 'leere Kategorie weg, dafür die Pizza-Extras');
   // Hat jemand weitere eigene Artikel in diese Kategorie gelegt, bleibt sie
   const keep = JSON.parse(JSON.stringify(v4));
   keep.products.push({ id: 'peigen2', cat: 272, nr: '', name: 'Knoblauchsauce', desc: '', v: [['', 100]], active: true });
@@ -363,13 +379,37 @@ test('Bestellarten: nur Lieferung und Abholung', () => {
 test('Extras richten sich nach der Größe', () => {
   const pizza = PRODUCTS.find((p) => p.nr === '220');
   const calzone = PRODUCTS.find((p) => p.nr === '260');
-  const extra = (name) => PRODUCTS.find((p) => p.name === name);
+  const extrasCat = CATEGORIES.find((c) => c.name === 'Extras (Pizza)').id;
+  const extra = (name) => PRODUCTS.find((p) => p.cat === extrasCat && p.name === name);
   assert.equal(extraPrice(extra('Zwiebeln'), pizza, 0), 150);
   assert.equal(extraPrice(extra('Zwiebeln'), pizza, 1), 250);
-  assert.equal(extraPrice(extra('Gyros (2)'), pizza, 2), 500);
+  assert.equal(extraPrice(extra('Gyros'), pizza, 2), 500);
   assert.equal(extraPrice(extra('Käserand'), pizza, 2), 250, 'Einheitspreis');
   assert.equal(extraPrice(extra('Artischocken'), pizza, 1), 250);
   assert.equal(extraPrice(extra('Thunfisch'), calzone, 0), 200, 'Calzone = 30cm');
+  // Pizzabrötchen (8 Stück) und Pizzabrot (mit/ohne Knoblauch): Preis der kleinsten Pizza-Größe
+  assert.equal(extraPrice(extra('Salami'), PRODUCTS.find((p) => p.nr === '280'), 0), 150);
+  assert.equal(extraPrice(extra('Thunfisch'), PRODUCTS.find((p) => p.nr === '279'), 1), 200);
+});
+
+test('Allergen-Kürzel sind entfernt', () => {
+  assert.equal(stripAllergens('Tomatensauce, Käse (2,4,6), Schinken (1,7,9)'), 'Tomatensauce, Käse, Schinken');
+  assert.equal(stripAllergens('Calzone (a,c) Salami'), 'Calzone Salami');
+  assert.equal(stripAllergens('Gyros (2) Feta (4)'), 'Gyros Feta');
+  assert.equal(stripAllergens('Burger Sauce (2,d,f), Salat'), 'Burger Sauce, Salat');
+  assert.equal(stripAllergens('Metaxasauce mit Käse (2,4,6) überbacken'), 'Metaxasauce mit Käse überbacken');
+  assert.equal(stripAllergens('mit 180g Rindfleisch (100%)'), 'mit 180g Rindfleisch (100%)', 'keine Allergene');
+  assert.equal(stripAllergens('Pizza Jalapeños (scharf)'), 'Pizza Jalapeños (scharf)');
+  assert.equal(stripAllergens('Extras (Pizza)'), 'Extras (Pizza)');
+  assert.equal(stripAllergens(undefined), '');
+  // In der gesamten Speisekarte keine Kürzel mehr
+  const texts = [
+    ...CATEGORIES.map((c) => c.name),
+    ...PRODUCTS.flatMap((p) => [p.name, p.desc, ...p.v.map((v) => v[0]), ...(p.opts ?? []).flatMap((g) => g.choices.map((c) => c[0]))]),
+  ];
+  for (const t of texts) assert.ok(!/\((?:[0-9a-z]{1,2})(?:\s*,\s*[0-9a-z]{1,2})*\)/i.test(t), t);
+  assert.equal(PRODUCTS.find((p) => p.nr === '221').desc, 'Tomatensauce, Käse, Schinken');
+  assert.equal(PRODUCTS.find((p) => p.nr === '260').name, 'Calzone Salami');
 });
 
 const line = (o) => ({ productId: 1, name: 'X', variant: '', unitPrice: 1000, qty: 1, tax: 7, extras: [], note: '', ...o });

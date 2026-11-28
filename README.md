@@ -12,6 +12,9 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt und ohne Server – alle Daten lie
   Lieferung),
   „Abschließen“ schließt sofort ab (bar) und druckt die Bons nach den Druckereinstellungen – eine Rückfrage kommt nur,
   wenn Lieferadresse oder Lieferkosten fehlen oder die Vorbestell-Uhrzeit schon vorbei ist.
+- **Extras**: Pizza, Calzone und Pizzabrötchen mit den Pizza-Extras (Pizzabrötchen zum Preis der kleinsten Pizza-Größe),
+  Burger und Pasta mit eigenen Extras. Artikel mit Extras öffnen beim Antippen den Auswahl-Dialog.
+- **Ohne Allergen-Kürzel**: Angaben wie „(2,4,6)“ oder „(a,c)“ werden beim Import der Speisekarte entfernt.
 - **Pizza halb/halb**: im Pizza-Dialog „½ Pizza halbieren“ und die zweite Hälfte wählen (Suche nach Nr. oder Name).
   Preis: teurere Hälfte oder Durchschnitt (Einstellungen › Bestellung). Auf dem Küchenbon stehen beide Hälften groß.
 - **Eingabe**: Such-/Nummernfeld wird nach jedem Artikel geleert; nach jeder Bestellung startet die Kasse wieder bei der

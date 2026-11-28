@@ -79,3 +79,15 @@ export function compareNr(a, b) {
   if (pb) return 1;
   return String(a ?? '').localeCompare(String(b ?? ''));
 }
+
+/**
+ * Allergen- und Zusatzstoff-Kürzel entfernen: "Käse (2,4,6)" -> "Käse", "Calzone (a,c) Salami" -> "Calzone Salami".
+ * Nur Klammern mit kurzen Kürzeln (1–2 Zeichen, mit Komma getrennt); "(100%)", "(scharf)", "(Pizza)" bleiben.
+ */
+export function stripAllergens(text) {
+  return String(text ?? '')
+    .replace(/\s*\((?:[0-9a-z]{1,2})(?:\s*,\s*[0-9a-z]{1,2})*\)/gi, '')
+    .replace(/\s+([,.])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}

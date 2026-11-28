@@ -10,16 +10,16 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { stripAllergens } from '../js/lib/util.js';
 
 const SOURCE_URL = 'https://bringstar.jetzt/rosdorf/pizza-haus-mehr-obernjesa/lieferservice';
 const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'js', 'data', 'menu.js');
 
 // Welche Kategorie liefert die Extras für welche Kategorie (Zuordnung über den Namen).
 const EXTRAS_RULES = [
-  { extras: /^extras \(pizza\)$/i, for: /^(pizza|calzone)$/i },
+  { extras: /^extras \(pizza\)$/i, for: /^(pizza|calzone|pizzabrötchen)$/i },
   { extras: /^extras burger$/i, for: /burger$/i },
   { extras: /^pasta extras$/i, for: /^pasta$/i },
-  { extras: /^pizzabrötchen extra$/i, for: /^pizzabrötchen$/i },
 ];
 const DRINKS = /getränk/i; // 19 % MwSt., alles andere 7 %
 const PIZZA_STATION = /pizza|calzone/i; // Küchenbon "Pizzaseite"
@@ -180,8 +180,9 @@ export function parseMenu(html) {
       continue;
     }
     const nr = clean(title[1].split('<span')[0]).replace(/\.$/, '');
-    const name = fixText(clean(/<span class="supMixtures">(.*?)<\/span>/s.exec(title[1])?.[1] ?? title[1]), used);
-    const desc = fixText(clean(tds[0].slice(title.index + title[0].length)), used);
+    // Allergen-/Zusatzstoff-Kürzel wie "(2,4,6)" werden nicht übernommen.
+    const name = stripAllergens(fixText(clean(/<span class="supMixtures">(.*?)<\/span>/s.exec(title[1])?.[1] ?? title[1]), used));
+    const desc = stripAllergens(fixText(clean(tds[0].slice(title.index + title[0].length)), used));
     const variants = [];
     for (const d of tds[1].matchAll(/<div class="[^"]*">(.*?)<\/div>/gs)) {
       const txt = clean(d[1]);
